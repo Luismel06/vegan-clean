@@ -83,7 +83,7 @@ export default function FooterTemplate() {
       </FooterTop>
 
       <Copy>
-        © {new Date().getFullYear()} Vegan Clean — Todos los derechos reservados.
+        © {new Date().getFullYear()} Easy Support S.R.L. — Todos los derechos reservados.
       </Copy>
     </FooterWrapper>
   );
