@@ -13,7 +13,7 @@ import {
   Menu,
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext"; // ← usa tu propio hook
-import logo from "../assets/logo.png";
+import logo from "../assets/logo_veganclean.png";
 
 // === GLOBAL FIX ===
 const NoPaddingGlobal = createGlobalStyle`
@@ -277,7 +277,7 @@ export function TecnicoLayout() {
 
         {/* SIDEBAR */}
         <Sidebar open={sidebarOpen}>
-          <LogoText>ORIS79E Tech</LogoText>
+          <LogoText>Vegan Clean</LogoText>
 
           <MenuContainer>
             <MenuItem onClick={() => { navigate("/tecnico/dashboard"); setSidebarOpen(false); }}>

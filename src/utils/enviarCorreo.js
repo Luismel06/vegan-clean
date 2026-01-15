@@ -15,7 +15,7 @@ export const enviarCorreoConfirmacion = async (datos) => {
       "WlQJz3LX5w7kFxyuT" // tu Public Key
     );
 
-    console.log("✅ Correo de confirmación enviado correctamente");
+    console.log("  Correo de confirmación enviado correctamente");
   } catch (error) {
     console.error("❌ Error al enviar correo:", error);
   }

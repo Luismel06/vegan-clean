@@ -140,7 +140,7 @@ export default function Contacto() {
       </InfoContainer>
       <MapContainer>
         <iframe
-          title="Mapa de ORIS79E Services"
+          title="Mapa de Vegan Clean"
           src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3762.612384587515!2d-69.854545!3d18.489876!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8eaf899b7f49e3e1%3A0x86c89a431aa45b74!2sLas%20Am%C3%A9ricas%2C%20Santo%20Domingo%20Este!5e0!3m2!1ses!2sdo!4v1697305600000!5m2!1ses!2sdo"
           width="100%"
           height="100%"

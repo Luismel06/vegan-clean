@@ -355,7 +355,7 @@ export default function Inicio() {
             />
 
             <Overlay>
-              <OverlayLogo src="/logo.png" alt="logo" />
+              <OverlayLogo src="/logo_veganclean.png" alt="logo" />
 
               <OverlayTitle>Soporte técnico en sitio</OverlayTitle>
               <OverlayText>

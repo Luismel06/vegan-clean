@@ -2,7 +2,7 @@ import styled from "styled-components";
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { Menu, X, Moon, Sun } from "lucide-react";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo_veganclean.png";
 import { useTheme } from "../../context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -206,7 +206,7 @@ export default function NavbarTemplate() {
       <NavWrapper>
         <LogoContainer to="/">
           <img src={logo} alt="logo" />
-          <h1>ORIS79E Service</h1>
+          <h1>Vegan Clean</h1>
         </LogoContainer>
 
         <MenuLinks>
@@ -225,7 +225,7 @@ export default function NavbarTemplate() {
           {/* 🌞🌙 Toggle con animación */}
           <ThemeToggleButton onClick={toggleTheme}>
             <motion.div
-              key={theme.name} // ✅ Forzar re-render al cambiar de tema
+              key={theme.name} //   Forzar re-render al cambiar de tema
               initial={{ rotate: -90, opacity: 0 }}
               animate={{ rotate: 0, opacity: 1 }}
               exit={{ rotate: 90, opacity: 0 }}

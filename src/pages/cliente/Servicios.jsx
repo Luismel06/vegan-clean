@@ -389,7 +389,7 @@ export default function Servicios() {
         },
         "yoOeYAk8XPOIvEhbf"
       );
-      console.log("✅ Correo enviado correctamente");
+      console.log("  Correo enviado correctamente");
     } catch (error) {
       console.error("❌ Error al enviar correo:", error);
     }
@@ -414,7 +414,7 @@ export default function Servicios() {
     const empresa_rnc =
       tipo_cliente === "empresa" ? e.target.empresa_rnc.value.trim() : null;
 
-    // ✅ Validar formato del email
+    //   Validar formato del email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Swal.fire({

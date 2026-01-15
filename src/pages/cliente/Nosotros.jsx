@@ -161,7 +161,7 @@ export default function Nosotros() {
   const timeline = [
   {
     year: "2025",
-    text: "Inicio de ORIS79E Services, ofreciendo servicios de instalación, mantenimiento y soporte técnico con una visión clara de calidad e innovación.",
+    text: "Inicio de Vegan Clean, ofreciendo servicios de instalación, mantenimiento y soporte técnico con una visión clara de calidad e innovación.",
   },
   {
     year: "2025 - Actualidad",
@@ -187,9 +187,9 @@ export default function Nosotros() {
           alt="Equipo de trabajo"
         />
         <div>
-          <h2>Sobre ORIS79E Services</h2>
+          <h2>Sobre Vegan Clean</h2>
           <p>
-            En <strong>ORIS79E Services</strong> ofrecemos soluciones
+            En <strong>Vegan Clean</strong> ofrecemos soluciones
             profesionales en instalación, mantenimiento y soporte técnico.
             Nuestro compromiso es garantizar calidad, eficiencia y atención
             personalizada en cada proyecto.

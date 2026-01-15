@@ -12,14 +12,14 @@ import {
   Menu,
   X,
   Sun,
-  Moon, // ✅ Íconos para modo día/noche
+  Moon, //   Íconos para modo día/noche
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo_veganclean.png";
 import { DollarSign } from "lucide-react";
-import { useTheme } from "../context/ThemeContext"; // ✅ Usa el hook correcto
+import { useTheme } from "../context/ThemeContext"; //   Usa el hook correcto
 
 const NoPaddingGlobal = createGlobalStyle`
   body, html {
@@ -191,7 +191,7 @@ const MobileMenuButton = styled.button`
   }
 `;
 
-// ✅ Nuevo botón de cambio de tema
+//   Nuevo botón de cambio de tema
 const ThemeToggleButton = styled.button`
   background: none;
   border: none;
@@ -214,7 +214,7 @@ export function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const { theme, toggleTheme } = useTheme(); // ✅ usa el hook del ThemeContext
+  const { theme, toggleTheme } = useTheme(); //   usa el hook del ThemeContext
 
   useEffect(() => {
     const checkSession = async () => {
@@ -273,7 +273,7 @@ export function AdminLayout() {
   if (checkingAuth) {
     return (
       <LoadingScreen>
-        <SpinningLogo src={logo} alt="ORIS79E Services Logo" />
+        <SpinningLogo src={logo} alt="Vegan Clean Logo" />
         <LoadingText>Verificando credenciales...</LoadingText>
       </LoadingScreen>
     );
@@ -358,13 +358,13 @@ export function AdminLayout() {
             </Title>
 
             <UserInfo>
-              {/* ✅ Nuevo botón de modo día/noche */}
+              {/*   Nuevo botón de modo día/noche */}
               <ThemeToggleButton onClick={toggleTheme} title="Cambiar tema">
                 {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </ThemeToggleButton>
 
               <div>
-                Hi, <strong>ORIS79E Services</strong>
+                Hi, <strong>Vegan Clean</strong>
                 <br />
                 <Email>{user?.email}</Email>
               </div>

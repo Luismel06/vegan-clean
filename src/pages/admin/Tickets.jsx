@@ -728,7 +728,7 @@ export default function Tickets() {
           fecha: fecha,
           hora: hora,
           tarea: tarea,
-          name: "ORIS79E Services",
+          name: "Vegan Clean",
         },
         EMAILJS_PUBLIC_KEY
       );

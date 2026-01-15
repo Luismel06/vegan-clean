@@ -100,7 +100,7 @@ const BackButton = styled.button`
 export default function LoginAdmin() {
   const navigate = useNavigate();
 
-  // ✅ Si ya hay sesión, redirigir directamente
+  //   Si ya hay sesión, redirigir directamente
   useEffect(() => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getUser();
