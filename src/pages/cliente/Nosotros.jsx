@@ -2,6 +2,7 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 
 const Container = styled.section`
+background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   width: 100%;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};
@@ -14,7 +15,7 @@ const Container = styled.section`
 `;
 
 
-/* 🏢 Sección principal */
+/*  Sección principal */
 const Hero = styled(motion.div)`
   width: 100%;
   max-width: 1100px;
@@ -24,8 +25,8 @@ const Hero = styled(motion.div)`
   justify-content: center;
   background: ${({ theme }) =>
     theme.name === "light"
-      ? "rgba(255, 255, 255, 0.6)"
-      : "rgba(25, 25, 25, 0.5)"};
+      ? "rgba(22, 154, 10, 0.6)"
+      : "rgba(37, 169, 4, 0.5)"};
   backdrop-filter: blur(14px);
   border-radius: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
@@ -57,11 +58,12 @@ const Hero = styled(motion.div)`
     p {
       font-size: 1rem;
       line-height: 1.7;
+      color: white
     }
   }
 `;
 
-/* 🎯 Misión, Visión, Valores */
+/*  Misión, Visión, Valores */
 const Section = styled.section`
   width: 100%;
   max-width: 1100px;
@@ -160,11 +162,11 @@ const TimelineItem = styled(motion.div)`
 export default function Nosotros() {
   const timeline = [
   {
-    year: "2025",
-    text: "Inicio de Vegan Clean, ofreciendo servicios de instalación, mantenimiento y soporte técnico con una visión clara de calidad e innovación.",
+    year: "2019",
+    text: "Inicio de Vega Clean, nace gracias a la visión y esfuerzo de su emprendedor fundador, con el objetivo de ofrecer insumos de limpieza de calidad y un servicio confiable para empresas y hogares.",
   },
   {
-    year: "2025 - Actualidad",
+    year: "2026 - Actualidad",
     text: "Crecimiento sostenido, implementación de plataforma digital para solicitud de servicios y expansión de nuestra base de clientes en toda República Dominicana.",
   },
   {
@@ -183,16 +185,16 @@ export default function Nosotros() {
         transition={{ duration: 0.8 }}
       >
         <img
-          src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=800&q=80"
+          src="/nosotros.png"
           alt="Equipo de trabajo"
         />
         <div>
-          <h2>Sobre Vegan Clean</h2>
+          <h2>Sobre Vega Clean</h2>
           <p>
-            En <strong>Vegan Clean</strong> ofrecemos soluciones
-            profesionales en instalación, mantenimiento y soporte técnico.
-            Nuestro compromiso es garantizar calidad, eficiencia y atención
-            personalizada en cada proyecto.
+            En <strong>Vega Clean</strong> nos especializamos en la fabricación, importación y distribución de insumos y equipos de limpieza
+            para hogares, comercios e instituciones en toda República Dominicana.
+            Nuestro compromiso es ofrecer productos de alta calidad que garanticen higiene, s
+            eguridad y excelentes resultados en cada uso.
           </p>
         </div>
       </Hero>
@@ -210,9 +212,10 @@ export default function Nosotros() {
           />
           <h3>Misión</h3>
           <p>
-            Proveer servicios técnicos de alta calidad, adaptados a las
-            necesidades de cada cliente, impulsando la innovación y la
-            eficiencia en cada instalación y mantenimiento realizado.
+            Brindar insumos y equipos de limpieza de alta calidad,
+            ofreciendo soluciones confiables y eficientes para hogares,
+            comercios e instituciones en República Dominicana, garantizando un servicio ágil,
+            atención personalizada y entregas oportunas.
           </p>
         </Card>
 
@@ -227,9 +230,9 @@ export default function Nosotros() {
           />
           <h3>Visión</h3>
           <p>
-            Ser la empresa líder en soluciones técnicas y tecnológicas en
-            República Dominicana, destacando por la confianza, innovación y
-            excelencia en el servicio.
+            Ser la empresa líder en distribución y fabricación de productos de limpieza en República Dominicana,
+            reconocida por la calidad de sus productos, su compromiso con la higiene y su capacidad de adaptarse a las necesidades de clientes
+            modernos y exigentes.
           </p>
         </Card>
 
@@ -244,11 +247,11 @@ export default function Nosotros() {
           />
           <h3>Valores</h3>
           <p>
-            • Compromiso y responsabilidad <br />
-            • Integridad y confianza <br />
-            • Innovación constante <br />
-            • Trabajo en equipo <br />
-            • Orientación al cliente
+            • Calidad: Productos confiables que cumplen altos estándares.<br />
+            • Compromiso: Responsabilidad y seriedad en cada entrega y servicio. <br />
+            • Atención al cliente: Trato cercano, rápido y personalizado. <br />
+            • Integridad: Transparencia y confianza en cada relación comercial. <br />
+            • Innovación: Mejora constante en productos, procesos y servicio.
           </p>
         </Card>
       </Section>

@@ -26,7 +26,7 @@ const InfoBlock = styled.div`
   max-width: 300px;
 
   h3 {
-    color: ${({ theme }) => theme.accent};
+    color: #5d9bf8;
     margin-bottom: 0.8rem;
   }
 
@@ -44,7 +44,7 @@ const SocialIcons = styled.div`
   margin-top: 1rem;
 
   a {
-    color: ${({ theme }) => theme.accent};
+    color: #5d9bf8;
     transition: color 0.3s;
     &:hover {
       color: ${({ theme }) => theme.text};
@@ -65,19 +65,19 @@ export default function FooterTemplate() {
       <FooterTop>
         <InfoBlock>
           <h3>Contacto</h3>
-          <p><Phone size={14} /> 849-577-6011</p>
-          <p><Mail size={14} /> Oriseservice394@gmail.com</p>
+          <p><Phone size={14} /> +1 (809) 365-6666</p>
+          <p><Mail size={14} /> modificacorreo@gmail.com</p>
         </InfoBlock>
 
         <InfoBlock>
           <h3>Dirección</h3>
-          <p><MapPin size={14} /> Calle Marginado Las Américas</p>
+          <p><MapPin size={14} /> Calle garcia godoy, La Vega 41000</p>
         </InfoBlock>
 
         <InfoBlock>
           <h3>Síguenos</h3>
           <SocialIcons>
-            <a href="https://instagram.com" target="_blank" rel="noreferrer"><Instagram size={20} /></a>
+            <a href="https://www.instagram.com/lavegaclean/" target="_blank" rel="noreferrer"><Instagram size={20} /></a>
           </SocialIcons>
         </InfoBlock>
       </FooterTop>

@@ -85,7 +85,7 @@ const RightButtons = styled.div`
 
 const AccessButton = styled(Link)`
   background-color: ${({ theme }) => theme.accent};
-  color: white;
+  color: #000000;
   padding: 0.5rem 1rem;
   border-radius: 8px;
   text-decoration: none;
@@ -206,7 +206,7 @@ export default function NavbarTemplate() {
       <NavWrapper>
         <LogoContainer to="/">
           <img src={logo} alt="logo" />
-          <h1>Vegan Clean</h1>
+          <h1>Vega Clean</h1>
         </LogoContainer>
 
         <MenuLinks>

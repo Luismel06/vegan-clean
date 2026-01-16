@@ -273,7 +273,7 @@ export function AdminLayout() {
   if (checkingAuth) {
     return (
       <LoadingScreen>
-        <SpinningLogo src={logo} alt="Vegan Clean Logo" />
+        <SpinningLogo src={logo} alt="Vega Clean Logo" />
         <LoadingText>Verificando credenciales...</LoadingText>
       </LoadingScreen>
     );
@@ -364,7 +364,7 @@ export function AdminLayout() {
               </ThemeToggleButton>
 
               <div>
-                Hi, <strong>Vegan Clean</strong>
+                Hi, <strong>Vega Clean</strong>
                 <br />
                 <Email>{user?.email}</Email>
               </div>

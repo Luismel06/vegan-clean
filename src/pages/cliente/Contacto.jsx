@@ -2,6 +2,7 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 
 const Container = styled.section`
+  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   width: 100%;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};
@@ -31,7 +32,14 @@ const InfoContainer = styled.div`
 
 const Card = styled(motion.div)`
   flex: 1 1 300px;
-  background-color: ${({ theme }) => theme.cardBackground};
+ background: ${({ theme }) =>
+    theme.name === "light"
+      ? "rgba(22, 154, 10, 0.6)"
+      : "rgba(37, 169, 4, 0.5)"};
+  backdrop-filter: blur(14px);
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
   border-radius: 12px;
   padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -39,16 +47,17 @@ const Card = styled(motion.div)`
   border: 1px solid ${({ theme }) => theme.border};
 
   h3 {
-    color: ${({ theme }) => theme.accent};
+    color: #73a6f3;
     margin-bottom: 0.5rem;
   }
 
   p {
     font-size: 1rem;
+    color: white;
   }
 
   a {
-    color: ${({ theme }) => theme.accent};
+    color: white;
     text-decoration: none;
   }
 `;
@@ -120,7 +129,7 @@ export default function Contacto() {
         <Card whileHover={{ scale: 1.03 }}>
           <h3>Teléfono</h3>
           <p>
-            <a href="tel:+18495776011">+1 (849) 577-6011</a>
+            <a href="tel:+18495776011">+1 (809) 365-6666</a>
           </p>
         </Card>
 
@@ -128,20 +137,20 @@ export default function Contacto() {
           <h3>Correo electrónico</h3>
           <p>
             <a href="mailto:Oriseservice394@gmail.com">
-              Oriseservice394@gmail.com
+              modificarcorreo@gmail.com
             </a>
           </p>
         </Card>
 
         <Card whileHover={{ scale: 1.03 }}>
           <h3>Dirección</h3>
-          <p>Calle Marginado Las Américas, Gonzales 2, 3D</p>
+          <p>Calle garcia godoy, La Vega 41000</p>
         </Card>
       </InfoContainer>
       <MapContainer>
         <iframe
-          title="Mapa de Vegan Clean"
-          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3762.612384587515!2d-69.854545!3d18.489876!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8eaf899b7f49e3e1%3A0x86c89a431aa45b74!2sLas%20Am%C3%A9ricas%2C%20Santo%20Domingo%20Este!5e0!3m2!1ses!2sdo!4v1697305600000!5m2!1ses!2sdo"
+          title="Mapa de Vega Clean"
+          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3767.835769000521!2d-70.50279379999999!3d19.202374199999994!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8eb02b7b426f4933%3A0x2f679fcbc25772e8!2sLa%20vega%20clean!5e0!3m2!1sen!2sdo!4v1768523827617!5m2!1sen!2sdo"
           width="100%"
           height="100%"
           style={{ border: 0 }}

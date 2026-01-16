@@ -128,7 +128,7 @@ const EstadoBadge = styled.span`
 
 // 🔹 Datos de la empresa para el PDF
 const EMPRESA = {
-  nombre: "VEGAN CLEAN",
+  nombre: "Vega Clean",
   rnc: "RNC: 1-00-00000-0", // cambia esto por tu RNC real
   direccion: "Santo Domingo, República Dominicana",
   telefono: "+1 (829) 723-6011",
@@ -344,7 +344,7 @@ function formatRD(value) {
 
   async function cargarLogo() {
     try {
-      const resp = await fetch("/logo-vegan-clean.jpg");
+      const resp = await fetch("/logo-vega-clean.jpg");
       const blob = await resp.blob();
       return await new Promise((resolve) => {
         const reader = new FileReader();
@@ -543,7 +543,7 @@ function formatRD(value) {
   // ---------- PIE ----------
   doc.setFontSize(10);
   doc.setTextColor(gray);
-  doc.text("Gracias por preferir Vegan Clean.", marginX, 750);
+  doc.text("Gracias por preferir Vega Clean.", marginX, 750);
   doc.text(`WhatsApp: ${EMPRESA.telefono}`, marginX, 765);
   doc.text(`Email: ${EMPRESA.email}`, marginX, 780);
 
@@ -940,7 +940,7 @@ const clienteLines = [
   return (
     <Wrapper>
       <Card>
-        <Title>VEGAN CLEAN</Title>
+        <Title>Vega Clean</Title>
         <p style={{ textAlign: "center", opacity: 0.8 }}>
           {formatearEstado(cotizacion.estado)} — #{cotizacion.id}
         </p>

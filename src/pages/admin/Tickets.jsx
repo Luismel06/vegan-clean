@@ -728,7 +728,7 @@ export default function Tickets() {
           fecha: fecha,
           hora: hora,
           tarea: tarea,
-          name: "Vegan Clean",
+          name: "Vega Clean",
         },
         EMAILJS_PUBLIC_KEY
       );

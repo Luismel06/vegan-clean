@@ -16,6 +16,7 @@ const Wrapper = styled.div`
       ? "linear-gradient(180deg, #02070b, #07131d, #0a1824)"
       : "linear-gradient(180deg, #f4fbff, #eef7ff, #eaf3ff)"};
   color: ${({ theme }) => theme.text};
+  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   font-family: "Inter", sans-serif;
 `;
 
@@ -48,7 +49,7 @@ const Title = styled(motion.h1)`
 
   span {
     display: block;
-    color: ${({ theme }) => (theme.mode === "dark" ? "#ffffff" : "#0c1b2d")};
+    color: ${({ theme }) => (theme.mode === "dark" ? "#ffffff" : "#1856a1")};
   }
 
   @media (max-width: 768px) {
@@ -77,13 +78,13 @@ const Badge = styled.span`
   font-size: 0.8rem;
   background: ${({ theme }) =>
     theme.mode === "dark"
-      ? "rgba(0, 188, 212, 0.15)"
-      : "rgba(0, 188, 212, 0.1)"};
+      ? "rgba(0, 160, 255, 0.16)"
+      : "rgba(0, 160, 255, 0.10)"};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === "dark"
-        ? "rgba(0, 188, 212, 0.4)"
-        : "rgba(0, 188, 212, 0.5)"};
+        ? "rgba(0, 200, 120, 0.35)"
+        : "rgba(0, 200, 120, 0.40)"};
   color: ${({ theme }) => theme.accent};
 `;
 
@@ -97,14 +98,14 @@ const Actions = styled.div`
 const BtnPrimary = styled(Link)`
   background: ${({ theme }) => theme.accent};
   padding: 0.85rem 1.7rem;
-  color: white;
+  color: #000000;
   border-radius: 999px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   text-decoration: none;
-  box-shadow: 0 8px 22px rgba(0, 188, 212, 0.35);
+  box-shadow: 0 8px 22px rgba(0, 160, 255, 0.32);
   transition: 0.25s;
 
   &:hover {
@@ -164,11 +165,7 @@ const Overlay = styled.div`
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  background: linear-gradient(
-    150deg,
-    rgba(0, 0, 0, 0.65),
-    rgba(0, 0, 0, 0.25)
-  );
+  background: #60876063;
   color: white;
 `;
 
@@ -209,8 +206,8 @@ const FeatureCard = styled.div`
 const IconBox = styled.div`
   background: ${({ theme }) =>
     theme.mode === "dark"
-      ? "rgba(0, 188, 212, 0.2)"
-      : "rgba(0, 188, 212, 0.12)"};
+      ? "rgba(0, 200, 120, 0.18)"
+      : "rgba(0, 200, 120, 0.12)"};
   padding: 0.5rem;
   border-radius: 999px;
 `;
@@ -311,36 +308,33 @@ export default function Inicio() {
         <Hero>
           <div>
             <Title>
-              Soluciones profesionales en{" "}
-              <span>cámaras, cableado y soporte IT</span>
-              para tu empresa.
+              Productos de limpieza profesional{" "}
+              <span>para empresas y comercios</span>
+              (Hoteles | Restaurantes | Hospitales).
             </Title>
 
             <Subtitle>
-              Instalación, mantenimiento y soporte para la infraestructura tecnológica
-              de tu negocio.
+              Suministro de insumos, asesoría y reposición para que tu operación se
+              mantenga impecable: higiene, desinfección y limpieza industrial.
             </Subtitle>
 
             <BadgeRow>
-              <Badge>Instalación completa</Badge>
-              <Badge>Soporte empresarial</Badge>
-              <Badge>Visitas programadas</Badge>
+              <Badge>Insumos industriales</Badge>
+              <Badge>Entrega y reposición</Badge>
+              <Badge>Asesoría de uso</Badge>
             </BadgeRow>
 
             <Actions>
               <BtnPrimary to="/servicios">
-                Ver servicios <ArrowRight size={16} />
+                Ver productos <ArrowRight size={16} />
               </BtnPrimary>
 
-              <BtnSecondary onClick={() => navigate("/servicios")}>
-                Necesito una instalación
-              </BtnSecondary>
             </Actions>
 
             <KPIRow>
-              <KPI><strong>24/7</strong>Soporte remoto</KPI>
-              <KPI><strong>+50</strong>Equipos instalados</KPI>
-              <KPI><strong>SLAs</strong>Definidos por empresa</KPI>
+              <KPI><strong>Calidad</strong>Productos confiables</KPI>
+              <KPI><strong>+50</strong>Clientes atendidos</KPI>
+              <KPI><strong>Stock</strong>Reposición continua</KPI>
             </KPIRow>
           </div>
 
@@ -357,12 +351,13 @@ export default function Inicio() {
             <Overlay>
               <OverlayLogo src="/logo_veganclean.png" alt="logo" />
 
-              <OverlayTitle>Soporte técnico en sitio</OverlayTitle>
+              <OverlayTitle>Higiene que se nota</OverlayTitle>
               <OverlayText>
-                Instalación de cámaras, racks, cableado y diagnósticos.
+                Jabón de manos, desinfectantes, detergentes y soluciones para alto
+                tráfico.
               </OverlayText>
               <OverlayText style={{ fontSize: "0.78rem", marginTop: "0.4rem" }}>
-                ✓ Coordinación · ✓ Evidencias · ✓ Seguimiento
+                ✓ Recomendación · ✓ Suministro · ✓ Seguimiento
               </OverlayText>
             </Overlay>
           </MediaCard>
@@ -373,24 +368,24 @@ export default function Inicio() {
           <FeatureCard>
             <IconBox><Wrench size={18} /></IconBox>
             <div>
-              <h4>Instalación llave en mano</h4>
-              <p>Desde levantamiento hasta puesta en marcha.</p>
+              <h4>Asesoría y dosificación</h4>
+              <p>Te ayudamos a elegir y aplicar el producto correcto.</p>
             </div>
           </FeatureCard>
 
           <FeatureCard>
             <IconBox><ShieldCheck size={18} /></IconBox>
             <div>
-              <h4>Diseñado para empresas</h4>
-              <p>Soluciones para oficinas y comercios.</p>
+              <h4>Calidad y seguridad</h4>
+              <p>Soluciones pensadas para entornos exigentes.</p>
             </div>
           </FeatureCard>
 
           <FeatureCard>
             <IconBox><Clock size={18} /></IconBox>
             <div>
-              <h4>Soporte y mantenimiento</h4>
-              <p>Preventivo y correctivo según contrato.</p>
+              <h4>Entrega y reposición</h4>
+              <p>Disponibilidad y despacho para tu operación diaria.</p>
             </div>
           </FeatureCard>
         </Features>
@@ -399,8 +394,8 @@ export default function Inicio() {
         <ServicesSection>
           <SectionHeader>
             <div>
-              <h3>Servicios principales</h3>
-              <p>Trabajos frecuentes realizados para nuestros clientes.</p>
+              <h3>Productos principales</h3>
+              <p>Lo más solicitado por nuestros clientes.</p>
             </div>
 
             <SeeAll to="/servicios">
@@ -410,7 +405,7 @@ export default function Inicio() {
 
           <ServicesGrid>
             {servicios.length === 0 ? (
-              <p>Cargando servicios...</p>
+              <p>Cargando productos...</p>
             ) : (
               servicios.map((s) => (
                 <ServiceCard key={s.id}>
@@ -424,17 +419,6 @@ export default function Inicio() {
             )}
           </ServicesGrid>
         </ServicesSection>
-
-        {/* STEPS */}
-        <Steps>
-          <h3 style={{ color: "var(--accent)" }}>¿Cómo trabajamos?</h3>
-          <StepList>
-            <li>Levantamiento técnico.</li>
-            <li>Propuesta y cotización.</li>
-            <li>Instalación y pruebas.</li>
-            <li>Entrega de evidencias y soporte continuo.</li>
-          </StepList>
-        </Steps>
       </Container>
     </Wrapper>
   );

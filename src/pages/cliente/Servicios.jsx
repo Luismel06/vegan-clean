@@ -6,8 +6,9 @@ import emailjs from "emailjs-com";
 import { supabase } from "../../supabase/supabase.config";
 import { insertarSolicitud } from "../../supabase/crudSolicitudes";
 
-// 🎨 === ESTILOS ===
+//  === ESTILOS ===
 const Container = styled.section`
+  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   width: 100%;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};
@@ -52,7 +53,7 @@ const CaseInput = styled.input`
 
 const CaseButton = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #fff;
+  color: #000000;
   border: none;
   padding: 0.7rem 1.4rem;
   border-radius: 8px;
@@ -124,7 +125,7 @@ const Tabs = styled.div`
 const TabButton = styled.button`
   background-color: ${({ $active, theme }) =>
     $active ? theme.accent : theme.cardBackground};
-  color: ${({ $active, theme }) => ($active ? "#fff" : theme.text)};
+  color: ${({ $active, theme }) => ($active ? "#000000" : theme.text)};
   border: none;
   border-radius: 8px;
   padding: 0.8rem 1.2rem;
@@ -178,7 +179,7 @@ const CardHeader = styled.div`
 
 const SolicitarBtn = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: white;
+  color: #000000;
   border: none;
   border-radius: 10px;
   padding: 0.8rem 1.2rem;
@@ -226,7 +227,7 @@ const TextArea = styled.textarea`
 
 const Button = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #fff;
+  color: #000000;
   border: none;
   padding: 0.9rem 1.6rem;
   border-radius: 10px;
@@ -291,7 +292,7 @@ const ProductCard = styled.div`
 
 const ProductTitle = styled.h4`
   margin: 0 0 0.2rem;
-  color: ${({ theme }) => theme.accent};
+  color: #03b503;
 `;
 
 const ProductTag = styled.span`
@@ -309,7 +310,7 @@ const PriceText = styled.div`
   font-weight: 700;
 `;
 
-// 🎯 === COMPONENTE PRINCIPAL ===
+//  === COMPONENTE PRINCIPAL ===
 export default function Servicios() {
   const [tab, setTab] = useState("disponibles");
   const [servicios, setServicios] = useState([]);
@@ -343,7 +344,7 @@ export default function Servicios() {
     fetchServicios();
   }, []);
 
-  // 🔹 Cargar productos catálogo
+  // Cargar productos catálogo
   useEffect(() => {
     const fetchProductos = async () => {
       setLoadingProductos(true);
@@ -360,17 +361,17 @@ export default function Servicios() {
     fetchProductos();
   }, []);
 
-  // 🔄 Alternar formulario
+  // Alternar formulario
   const toggleFormulario = (id) => {
     setServicioSeleccionado(servicioSeleccionado === id ? null : id);
     setTipoCliente("persona"); // reset al abrir/cerrar
   };
 
-  // 🧾 Generar número de caso único
+  //  Generar número de caso único
   const generarNumeroCaso = () =>
     "CASE-" + Math.floor(100000 + Math.random() * 900000);
 
-  // ✉️ Enviar correo de confirmación
+  //  Enviar correo de confirmación
   const enviarCorreoConfirmacion = async (
     nombre,
     email,
@@ -395,7 +396,7 @@ export default function Servicios() {
     }
   };
 
-  // 🚀 Enviar solicitud a Supabase
+  // Enviar solicitud a Supabase
   const handleSubmit = async (e, s) => {
     e.preventDefault();
     const numero_caso = generarNumeroCaso();
@@ -656,12 +657,12 @@ export default function Servicios() {
 
       {/* TABS */}
       <Tabs>
-        <TabButton
+         {/*<TabButton
           $active={tab === "disponibles"}
           onClick={() => setTab("disponibles")}
         >
           Servicios disponibles
-        </TabButton>
+        </TabButton>*/}
         <TabButton
           $active={tab === "productos"}
           onClick={() => setTab("productos")}

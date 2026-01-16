@@ -277,7 +277,7 @@ export function TecnicoLayout() {
 
         {/* SIDEBAR */}
         <Sidebar open={sidebarOpen}>
-          <LogoText>Vegan Clean</LogoText>
+          <LogoText>Vega Clean</LogoText>
 
           <MenuContainer>
             <MenuItem onClick={() => { navigate("/tecnico/dashboard"); setSidebarOpen(false); }}>
