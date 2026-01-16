@@ -10,10 +10,7 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: ${({ theme }) =>
-    theme.name === "dark"
-      ? "linear-gradient(135deg, #0f2027, #203a43, #2c5364)"
-      : "linear-gradient(135deg, #e0f7fa, #b2ebf2, #80deea)"};
+  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
 `;
 
 const Card = styled.div`
@@ -45,7 +42,7 @@ const Input = styled.input`
 const Button = styled.button`
   width: 100%;
   background: ${({ theme }) => theme.accent};
-  color: white;
+  color: #000000;
   border: none;
   border-radius: 8px;
   padding: 0.9rem;

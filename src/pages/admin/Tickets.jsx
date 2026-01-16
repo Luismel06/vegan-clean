@@ -763,31 +763,31 @@ export default function Tickets() {
           $active={tab === "solicitudes"}
           onClick={() => setTab("solicitudes")}
         >
-          📥 Solicitudes nuevas
+          Solicitudes nuevas
         </TabButton>
         <TabButton
           $active={tab === "activos"}
           onClick={() => setTab("activos")}
         >
-          🟦 Tickets activos
+          Tickets activos
         </TabButton>
         <TabButton
           $active={tab === "finalizados"}
           onClick={() => setTab("finalizados")}
         >
-          🟩 Finalizados
+          Finalizados
         </TabButton>
         <TabButton
           $active={tab === "cancelados"}
           onClick={() => setTab("cancelados")}
         >
-          🟥 Cancelados
+          Cancelados
         </TabButton>
         <TabButton
           $active={tab === "detalles"}
           onClick={() => setTab("detalles")}
         >
-          🔍 Detalles Ticket
+          Detalles Ticket
         </TabButton>
       </Tabs>
 

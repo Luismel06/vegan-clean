@@ -8,7 +8,7 @@ export default function NoAutorizado() {
         fontFamily: "sans-serif",
       }}
     >
-      <h1>🚫 Acceso denegado</h1>
+      <h1>Acceso denegado</h1>
       <p>No tienes permisos para acceder a esta sección.</p>
 
       <a

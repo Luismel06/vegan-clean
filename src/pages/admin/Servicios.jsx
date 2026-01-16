@@ -36,7 +36,6 @@ const Header = styled.div`
 
 const Title = styled.h2`
   margin: 0;
-  color: ${({ theme }) => theme.accent};
   font-weight: 700;
 `;
 
@@ -47,8 +46,7 @@ const Actions = styled.div`
 `;
 
 const Button = styled.button`
-  background-color: ${({ theme }) => theme.accent};
-  color: #fff;
+  background-color: #a3f3be;
   border: none;
   border-radius: 10px;
   padding: 0.7rem 1rem;

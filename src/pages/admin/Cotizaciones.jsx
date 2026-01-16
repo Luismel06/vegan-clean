@@ -39,7 +39,6 @@ const Select = styled.select`
 
 const Button = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #fff;
   border: none;
   border-radius: 8px;
   padding: 0.7rem 1.2rem;

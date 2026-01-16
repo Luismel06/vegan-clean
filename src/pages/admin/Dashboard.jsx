@@ -46,7 +46,6 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
-  color: ${({ theme }) => theme.accent};
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
@@ -83,7 +82,6 @@ const IconWrapper = styled.div`
   justify-content: center;
   align-items: center;
   background-color: ${({ theme }) => theme.accent};
-  color: white;
   width: 55px;
   height: 55px;
   border-radius: 50%;
@@ -320,7 +318,8 @@ export default function Dashboard() {
       <Header>
         <Title>Resumen Financiero</Title>
         <Subtitle>
-          Hola {user?.email}, analiza tus ventas, cotizaciones y solicitudes.
+           Hola {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email},
+          analiza tus ventas, cotizaciones y solicitudes.
         </Subtitle>
       </Header>
 

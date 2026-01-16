@@ -6,7 +6,7 @@ export const lightTheme = {
   Hero: "#a3f3be",
   text: "#094c8f",
   cardBackground: "#a3f3be",
-  accent: "#ffffff",     // AZUL (principal)
+  accent: "#0591e9",     // AZUL (principal)
   accent2: "#00c27a",    // VERDE (secundario)
   border: "rgba(0,0,0,0.15)",
 };

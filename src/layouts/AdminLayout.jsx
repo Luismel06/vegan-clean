@@ -153,13 +153,12 @@ const UserInfo = styled.div`
 `;
 
 const Email = styled.span`
-  color: ${({ theme }) => theme.accent};
   font-weight: 500;
 `;
 
 const LogoutButton = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #fff;
+  color: #030778;
   border: none;
   border-radius: 8px;
   padding: 0.6rem 1rem;
@@ -364,9 +363,9 @@ export function AdminLayout() {
               </ThemeToggleButton>
 
               <div>
-                Hi, <strong>Vega Clean</strong>
+                <strong>Vega Clean</strong>
                 <br />
-                <Email>{user?.email}</Email>
+                <Email>{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</Email>
               </div>
               <LogoutButton onClick={handleLogout}>
                 <LogOut size={18} /> Salir

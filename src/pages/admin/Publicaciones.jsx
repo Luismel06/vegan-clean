@@ -54,7 +54,6 @@ const TextArea = styled.textarea`
 
 const Button = styled.button`
   background: ${({ theme }) => theme.accent};
-  color: white;
   border: none;
   padding: 0.9rem 1.2rem;
   border-radius: 10px;

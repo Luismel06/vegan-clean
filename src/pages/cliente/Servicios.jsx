@@ -577,7 +577,7 @@ export default function Servicios() {
 
   return (
     <Container>
-      <h2 style={{ color: "#00bcd4", marginBottom: "1rem" }}>
+      <h2 style={{ color: "#0591e9;", marginBottom: "1rem" }}>
         Nuestros Servicios
       </h2>
 
