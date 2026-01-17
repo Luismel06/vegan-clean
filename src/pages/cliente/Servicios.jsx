@@ -657,12 +657,12 @@ export default function Servicios() {
 
       {/* TABS */}
       <Tabs>
-         {/*<TabButton
+         <TabButton
           $active={tab === "disponibles"}
           onClick={() => setTab("disponibles")}
         >
           Servicios disponibles
-        </TabButton>*/}
+        </TabButton>
         <TabButton
           $active={tab === "productos"}
           onClick={() => setTab("productos")}

@@ -307,7 +307,7 @@ export function TecnicoLayout() {
                 <Menu size={22} />
               </HamburgerButton>
 
-              <Title>Panel Técnico</Title>
+              <Title>Panel Pre-Ventas</Title>
             </TopLeft>
 
             <div style={{ display: "flex", alignItems: "center" }}>

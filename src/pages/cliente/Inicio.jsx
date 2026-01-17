@@ -1,7 +1,7 @@
 // src/pages/cliente/Inicio.jsx
 import { useEffect, useState } from "react";
 import styled from "styled-components";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import { Wrench, ShieldCheck, Clock, ArrowRight } from "lucide-react";
@@ -11,10 +11,6 @@ const Wrapper = styled.div`
   width: 100%;
   min-height: 100vh;
   padding-top: 4rem; /* ← FIX para que no se pegue al header */
-  background: ${({ theme }) =>
-    theme.mode === "dark"
-      ? "linear-gradient(180deg, #02070b, #07131d, #0a1824)"
-      : "linear-gradient(180deg, #f4fbff, #eef7ff, #eaf3ff)"};
   color: ${({ theme }) => theme.text};
   background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   font-family: "Inter", sans-serif;
@@ -113,21 +109,6 @@ const BtnPrimary = styled(Link)`
   }
 `;
 
-const BtnSecondary = styled.button`
-  padding: 0.85rem 1.5rem;
-  background: transparent;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.border};
-  font-size: 0.95rem;
-  color: ${({ theme }) => theme.text};
-  cursor: pointer;
-  transition: 0.2s;
-
-  &:hover {
-    background: ${({ theme }) => theme.cardBackground};
-  }
-`;
-
 const KPIRow = styled.div`
   margin-top: 1.4rem;
   display: flex;
@@ -170,7 +151,8 @@ const Overlay = styled.div`
 `;
 
 const OverlayLogo = styled.img`
-  width: 70px;
+  width: 100%;
+  margin-top: auto;
   margin-bottom: 0.5rem;
 `;
 
@@ -212,7 +194,7 @@ const IconBox = styled.div`
   border-radius: 999px;
 `;
 
-// ========== SERVICIOS ==========
+// ========== SECCIONES ==========
 const ServicesSection = styled.section`
   margin-top: 3rem;
 `;
@@ -242,24 +224,39 @@ const ServicesGrid = styled.div`
 
 const ServiceCard = styled.div`
   background: ${({ theme }) => theme.cardBackground};
-  padding: 1.2rem;
+  padding: 1rem;
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
+  transition: 0.25s;
 
-  h4 {
-    margin: 0;
-    color: ${({ theme }) => theme.accent};
-  }
-
-  p {
-    opacity: 0.85;
-    margin: 0.4rem 0;
-  }
-
-  small {
-    opacity: 0.7;
+  &:hover {
+    transform: translateY(-2px);
   }
 `;
+
+const ProductImage = styled.img`
+  width: 100%;
+  height: 175px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => (theme.mode === "dark" ? "#0b1220" : "#f3f6fb")};
+`;
+
+const ProductName = styled.h4`
+  margin: 0.85rem 0 0;
+  color: ${({ theme }) => theme.accent};
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1.2;
+`;
+const ProductDesc = styled.p`
+  margin: 0.45rem 0 0;
+  opacity: 0.9;
+  font-size: 0.92rem;
+  line-height: 1.45;
+`;
+
 
 const SeeAll = styled(Link)`
   color: ${({ theme }) => theme.accent};
@@ -268,36 +265,55 @@ const SeeAll = styled(Link)`
   align-items: center;
 `;
 
-// ========== STEPS ==========
-const Steps = styled.section`
-  margin-top: 3.5rem;
-  padding: 1.5rem;
-  border-radius: 20px;
-  background: ${({ theme }) =>
-    theme.mode === "dark"
-      ? "rgba(255,255,255,0.06)"
-      : "rgba(0,0,0,0.05)"};
+const MediaBg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 `;
 
-const StepList = styled.ol`
-  margin-left: 1.2rem;
 
-  li + li {
-    margin-top: 0.4rem;
-  }
-`;
+// ===== Helper: obtener URL pública desde Storage (bucket público) =====
+function getPublicImageUrl(bucket, path) {
+  if (!path) return "";
+  // Si ya viene una URL completa, la devolvemos tal cual.
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data?.publicUrl || "";
+}
 
 export default function Inicio() {
-  const [servicios, setServicios] = useState([]);
-  const navigate = useNavigate();
+  const [productos, setProductos] = useState([]);
+  const [equipos, setEquipos] = useState([]);
 
   useEffect(() => {
+    // Productos (bucket: productos)
     supabase
-      .from("servicios")
-      .select("*")
+      .from("productos")
+      .select("id, nombre, descripcion, imagen_url")
       .order("id", { ascending: true })
-      .then(({ data }) => {
-        if (data) setServicios(data.slice(0, 4));
+      .limit(4)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error cargando productos:", error);
+          return;
+        }
+        setProductos(data || []);
+      });
+
+    // Equipos (bucket: equipos)
+    supabase
+      .from("equipos")
+      .select("id, nombre, descripcion, imagen_url")
+      .order("id", { ascending: true })
+      .limit(4)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error cargando equipos:", error);
+          return;
+        }
+        setEquipos(data || []);
       });
   }, []);
 
@@ -325,48 +341,47 @@ export default function Inicio() {
             </BadgeRow>
 
             <Actions>
-              <BtnPrimary to="/servicios">
+              {/* Ajusta la ruta si tu página de productos es otra */}
+              <BtnPrimary to="/productos">
                 Ver productos <ArrowRight size={16} />
               </BtnPrimary>
-
             </Actions>
 
             <KPIRow>
-              <KPI><strong>Calidad</strong>Productos confiables</KPI>
-              <KPI><strong>+50</strong>Clientes atendidos</KPI>
-              <KPI><strong>Stock</strong>Reposición continua</KPI>
+              <KPI>
+                <strong>Calidad</strong>Productos confiables
+              </KPI>
+              <KPI>
+                <strong>+50</strong>Clientes atendidos
+              </KPI>
+              <KPI>
+                <strong>Stock</strong>Reposición continua
+              </KPI>
             </KPIRow>
           </div>
 
           {/* HERO MEDIA */}
           <MediaCard>
-            <VideoBg
-              autoPlay
-              muted
-              loop
-              playsInline
-              src="https://videos.pexels.com/video-files/856184/856184-hd_1920_1080_24fps.mp4"
-            />
+  <MediaBg src="/inicio.png" alt="Vega Clean" />
+  <Overlay>
+    <OverlayTitle>Higiene que se nota</OverlayTitle>
+    <OverlayText>
+      Jabón de manos, desinfectantes, detergentes y soluciones para alto tráfico.
+    </OverlayText>
+    <OverlayText style={{ fontSize: "0.78rem", marginTop: "0.4rem" }}>
+      ✓ Recomendación · ✓ Suministro · ✓ Seguimiento
+    </OverlayText>
+  </Overlay>
+</MediaCard>
 
-            <Overlay>
-              <OverlayLogo src="/logo_veganclean.png" alt="logo" />
-
-              <OverlayTitle>Higiene que se nota</OverlayTitle>
-              <OverlayText>
-                Jabón de manos, desinfectantes, detergentes y soluciones para alto
-                tráfico.
-              </OverlayText>
-              <OverlayText style={{ fontSize: "0.78rem", marginTop: "0.4rem" }}>
-                ✓ Recomendación · ✓ Suministro · ✓ Seguimiento
-              </OverlayText>
-            </Overlay>
-          </MediaCard>
         </Hero>
 
         {/* FEATURES */}
         <Features>
           <FeatureCard>
-            <IconBox><Wrench size={18} /></IconBox>
+            <IconBox>
+              <Wrench size={18} />
+            </IconBox>
             <div>
               <h4>Asesoría y dosificación</h4>
               <p>Te ayudamos a elegir y aplicar el producto correcto.</p>
@@ -374,7 +389,9 @@ export default function Inicio() {
           </FeatureCard>
 
           <FeatureCard>
-            <IconBox><ShieldCheck size={18} /></IconBox>
+            <IconBox>
+              <ShieldCheck size={18} />
+            </IconBox>
             <div>
               <h4>Calidad y seguridad</h4>
               <p>Soluciones pensadas para entornos exigentes.</p>
@@ -382,7 +399,9 @@ export default function Inicio() {
           </FeatureCard>
 
           <FeatureCard>
-            <IconBox><Clock size={18} /></IconBox>
+            <IconBox>
+              <Clock size={18} />
+            </IconBox>
             <div>
               <h4>Entrega y reposición</h4>
               <p>Disponibilidad y despacho para tu operación diaria.</p>
@@ -390,7 +409,7 @@ export default function Inicio() {
           </FeatureCard>
         </Features>
 
-        {/* SERVICIOS */}
+        {/* PRODUCTOS */}
         <ServicesSection>
           <SectionHeader>
             <div>
@@ -398,24 +417,64 @@ export default function Inicio() {
               <p>Lo más solicitado por nuestros clientes.</p>
             </div>
 
-            <SeeAll to="/servicios">
+            <SeeAll to="/productos">
               Ver todos <ArrowRight size={14} />
             </SeeAll>
           </SectionHeader>
 
           <ServicesGrid>
-            {servicios.length === 0 ? (
+            {productos.length === 0 ? (
               <p>Cargando productos...</p>
             ) : (
-              servicios.map((s) => (
-                <ServiceCard key={s.id}>
-                  <h4>{s.nombre}</h4>
-                  <p>{s.descripcion}</p>
-                  {s.precio && (
-                    <small>Desde RD$ {Number(s.precio).toLocaleString()}</small>
-                  )}
-                </ServiceCard>
-              ))
+              productos.map((p) => {
+                const img = getPublicImageUrl("productos", p.imagen_url);
+                return (
+                  <ServiceCard key={p.id}>
+                    <ProductImage
+                      src={img || "/placeholder-producto.png"}
+                      alt={p.nombre || "producto"}
+                      loading="lazy"
+                    />
+                    <ProductName>{p.nombre}</ProductName>
+                    {p.descripcion && <ProductDesc>{p.descripcion}</ProductDesc>}
+                  </ServiceCard>
+                );
+              })
+            )}
+          </ServicesGrid>
+        </ServicesSection>
+
+        {/* EQUIPOS */}
+        <ServicesSection>
+          <SectionHeader>
+            <div>
+              <h3>Equipos principales</h3>
+              <p>Equipos recomendados para complementar tu operación.</p>
+            </div>
+
+            <SeeAll to="/equipos">
+              Ver todos <ArrowRight size={14} />
+            </SeeAll>
+          </SectionHeader>
+
+          <ServicesGrid>
+            {equipos.length === 0 ? (
+              <p>Cargando equipos...</p>
+            ) : (
+              equipos.map((e) => {
+                const img = getPublicImageUrl("equipos", e.imagen_url);
+                return (
+                  <ServiceCard key={e.id}>
+                    <ProductImage
+                      src={img || "/placeholder-equipo.png"}
+                      alt={e.nombre || "equipo"}
+                      loading="lazy"
+                    />
+                    <ProductName>{e.nombre}</ProductName>
+                    {e.descripcion && <ProductDesc>{e.descripcion}</ProductDesc>}
+                  </ServiceCard>
+                );
+              })
             )}
           </ServicesGrid>
         </ServicesSection>
