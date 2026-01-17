@@ -417,7 +417,7 @@ export default function Inicio() {
               <p>Lo más solicitado por nuestros clientes.</p>
             </div>
 
-            <SeeAll to="/productos">
+            <SeeAll to="/servicios">
               Ver todos <ArrowRight size={14} />
             </SeeAll>
           </SectionHeader>
@@ -452,7 +452,7 @@ export default function Inicio() {
               <p>Equipos recomendados para complementar tu operación.</p>
             </div>
 
-            <SeeAll to="/equipos">
+            <SeeAll to="/servicios">
               Ver todos <ArrowRight size={14} />
             </SeeAll>
           </SectionHeader>
