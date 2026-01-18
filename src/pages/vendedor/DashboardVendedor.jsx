@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { useAuthStore } from "../../store/useAuthStore";
+import { useAuthStore } from "../../store/useAuthStore.jsx";
 
 import {
   ClipboardList,
@@ -131,7 +131,7 @@ const ActivityItem = styled.div`
 `;
 
 // === COMPONENTE PRINCIPAL ===
-export default function DashboardTecnico() {
+export default function DashboardVendedor() {
   const { user } = useAuthStore();
   const [stats, setStats] = useState({
     asignados: 0,
@@ -152,12 +152,12 @@ export default function DashboardTecnico() {
     const email = user.email;
 
     // =============================
-    // 1. TICKETS ASIGNADOS AL TECNICO
+    // 1. TICKETS ASIGNADOS AL vendedor
     // =============================
     const { data: tickets } = await supabase
       .from("solicitudes")
       .select("*")
-      .ilike("tecnico_asignado", `%${email}%`);
+      .ilike("vendedor_asignado", `%${email}%`);
 
     const asignados = tickets.length;
     const pendientes = tickets.filter(
@@ -183,7 +183,7 @@ export default function DashboardTecnico() {
       )[0] || null;
 
     // =============================
-    // 2. HISTORIAL DEL TECNICO (5 más recientes)
+    // 2. HISTORIAL DEL vendedor (5 más recientes)
     // =============================
     const { data: hist } = await supabase
       .from("historial_tickets")
@@ -213,9 +213,9 @@ export default function DashboardTecnico() {
       .lte("fecha", finSemana.toISOString());
 
     const { data: actividadRequests } = await supabase
-      .from("tecnico_requests")
+      .from("vendedor_requests")
       .select("fecha_solicitud")
-      .eq("tecnico_email", email)
+      .eq("vendedor_email", email)
       .gte("fecha_solicitud", inicioSemana.toISOString())
       .lte("fecha_solicitud", finSemana.toISOString());
 

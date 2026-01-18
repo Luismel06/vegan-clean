@@ -4,7 +4,7 @@ export default function NoAutorizado() {
       style={{
         padding: "5rem",
         textAlign: "center",
-        color: "#00bcd4",
+        color: "#27d400",
         fontFamily: "sans-serif",
       }}
     >

@@ -233,16 +233,16 @@ export function AdminLayout() {
         .single();
 
       if (perfilError || !perfil) {
-        await supabase.from("usuarios").insert([{ email: userEmail, rol: "tecnico" }]);
-        navigate("/tecnico", { replace: true });
+        await supabase.from("usuarios").insert([{ email: userEmail, rol: "vendedor" }]);
+        navigate("/vendedor", { replace: true });
         return;
       }
 
       if (perfil.rol === "admin") {
         setUser(data.user);
         setCheckingAuth(false);
-      } else if (perfil.rol === "tecnico") {
-        navigate("/tecnico", { replace: true });
+      } else if (perfil.rol === "vendedor") {
+        navigate("/vendedor", { replace: true });
         return;
       } else {
         await Swal.fire({
@@ -307,9 +307,9 @@ export function AdminLayout() {
           </IconButton>
 
           <IconButton
-            onClick={() => navigate("/admin/servicios")}
-            $active={currentPath === "/admin/servicios"}
-            title="Servicios"
+            onClick={() => navigate("/admin/equipos")}
+            $active={currentPath === "/admin/equipos"}
+            title="Equipos"
           >
             <Wrench size={24} />
           </IconButton>
@@ -353,7 +353,7 @@ export function AdminLayout() {
               <MobileMenuButton onClick={() => setMenuOpen(!menuOpen)}>
                 <Menu size={22} />
               </MobileMenuButton>
-              Dashboard
+              Dashboard - Administrador
             </Title>
 
             <UserInfo>

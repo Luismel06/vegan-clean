@@ -332,7 +332,7 @@ export default function Tickets() {
   const [finalizados, setFinalizados] = useState([]);
   const [cancelados, setCancelados] = useState([]);
 
-  const [tecnicos, setTecnicos] = useState([]);
+  const [vendedors, setvendedors] = useState([]);
 
   // Para DETALLES TICKET
   const [ticketSeleccionado, setTicketSeleccionado] = useState(null);
@@ -348,17 +348,17 @@ export default function Tickets() {
   }, []);
 
   async function cargarTodo() {
-    obtenerTecnicos();
+    obtenervendedors();
     obtenerSolicitudes();
     obtenerTicketsCategorizados();
   }
 
-  const obtenerTecnicos = async () => {
+  const obtenervendedors = async () => {
     const { data } = await supabase
       .from("usuarios")
       .select("email, nombre")
-      .eq("rol", "tecnico");
-    setTecnicos(data || []);
+      .eq("rol", "vendedor");
+    setvendedors(data || []);
   };
 
   // === 1. SOLICITUDES (estado = "Solicitud enviada")
@@ -484,7 +484,7 @@ export default function Tickets() {
     setHistorial(h || []);
 
     const { data: r } = await supabase
-      .from("tecnico_requests")
+      .from("vendedor_requests")
       .select("*")
       .eq("ticket_id", ticket.id)
       .order("fecha_solicitud", { ascending: true });
@@ -504,7 +504,7 @@ export default function Tickets() {
         id: `h-${h.id}`,
         fecha: h.fecha,
         autor: h.rol || "sistema",
-        esTecnico: h.rol === "tecnico",
+        esvendedor: h.rol === "vendedor",
         texto: h.descripcion,
         tipo: "historial",
       })) || [];
@@ -513,9 +513,9 @@ export default function Tickets() {
       requests?.map((r) => ({
         id: `r-${r.id}`,
         fecha: r.fecha_solicitud,
-        autor: "tecnico",
-        esTecnico: true,
-        texto: r.nota_tecnico,
+        autor: "vendedor",
+        esvendedor: true,
+        texto: r.nota_vendedor,
         tipo: "request",
         estadoSolicitado: r.estado_solicitado,
         estadoRequest: r.estado_request || "pendiente",
@@ -533,7 +533,7 @@ export default function Tickets() {
     const nuevoEstado = aprobado ? "Aprobado" : "Rechazado";
 
     await supabase
-      .from("tecnico_requests")
+      .from("vendedor_requests")
       .update({ estado_request: nuevoEstado })
       .eq("id", req.id);
 
@@ -642,8 +642,8 @@ export default function Tickets() {
   }
 
   // === 6. Asignar técnico desde solicitudes ===
-  const asignarTecnico = async (id, numero_caso, cliente, email, servicio) => {
-    const tecnicosHTML = tecnicos
+  const asignarvendedor = async (id, numero_caso, cliente, email, servicio) => {
+    const vendedorsHTML = vendedors
       .map(
         (t) => `<option value="${t.email}">${t.nombre} (${t.email})</option>`
       )
@@ -653,8 +653,8 @@ export default function Tickets() {
       title: "Asignar técnico y tarea",
       html: `
       <label style="font-weight:bold;">Técnico:</label><br/>
-      <select id="tecnico" class="swal2-input" style="width:80%;">
-        ${tecnicosHTML}
+      <select id="vendedor" class="swal2-input" style="width:80%;">
+        ${vendedorsHTML}
       </select><br/>
 
       <label style="font-weight:bold;">Fecha agendada:</label>
@@ -674,7 +674,7 @@ export default function Tickets() {
       showCancelButton: true,
       preConfirm: () => {
         return {
-          tecnico: document.getElementById("tecnico").value,
+          vendedor: document.getElementById("vendedor").value,
           fecha: document.getElementById("fecha").value,
           hora: document.getElementById("hora").value,
           tarea: document.getElementById("tipo").value,
@@ -684,19 +684,19 @@ export default function Tickets() {
 
     if (!formValues) return;
 
-    const { tecnico, fecha, hora, tarea } = formValues;
+    const { vendedor, fecha, hora, tarea } = formValues;
 
     // === OBJETO DEL TÉCNICO ===
-    const tecnicoObj = tecnicos.find((t) => t.email === tecnico);
-    const tecnicoAsignado = tecnicoObj
-      ? `${tecnicoObj.nombre} (${tecnicoObj.email})`
-      : tecnico;
+    const vendedorObj = vendedors.find((t) => t.email === vendedor);
+    const vendedorAsignado = vendedorObj
+      ? `${vendedorObj.nombre} (${vendedorObj.email})`
+      : vendedor;
 
     // === 1) ACTUALIZAR BD ===
     await supabase
       .from("solicitudes")
       .update({
-        tecnico_asignado: tecnicoAsignado,
+        vendedor_asignado: vendedorAsignado,
         estado: "Agendado",
         fecha_agendada: fecha,
         hora_agendada: hora,
@@ -710,8 +710,8 @@ export default function Tickets() {
         ticket_id: id,
         usuario: "admin",
         rol: "admin",
-        accion: "asignacion_tecnico",
-        descripcion: `Se asignó el técnico ${tecnicoAsignado} para la tarea "${tarea}" el ${fecha} a las ${hora}.`,
+        accion: "asignacion_vendedor",
+        descripcion: `Se asignó el técnico ${vendedorAsignado} para la tarea "${tarea}" el ${fecha} a las ${hora}.`,
       },
     ]);
 
@@ -723,7 +723,7 @@ export default function Tickets() {
         {
           email: email,
           cliente: cliente,
-          tecnico: tecnicoObj?.nombre ?? tecnico,
+          vendedor: vendedorObj?.nombre ?? vendedor,
           servicio: servicio,
           fecha: fecha,
           hora: hora,
@@ -832,7 +832,7 @@ export default function Tickets() {
                   <td>
                     <ActionButton
                       onClick={() =>
-                        asignarTecnico(
+                        asignarvendedor(
                           s.id,
                           s.numero_caso,
                           s.cliente,
@@ -874,7 +874,7 @@ export default function Tickets() {
                 <tr key={t.id}>
                   <td>{t.numero_caso}</td>
                   <td>{t.cliente}</td>
-                  <td>{t.tecnico_asignado || "Sin asignar"}</td>
+                  <td>{t.vendedor_asignado || "Sin asignar"}</td>
                   <td>{t.servicio_nombre}</td>
                   <td>{t.tipo_tarea || "-"}</td>
                   <td>{t.fecha_agendada || "-"}</td>
@@ -1018,7 +1018,7 @@ export default function Tickets() {
                       boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
                     }}
                     onClick={() =>
-                      asignarTecnico(
+                      asignarvendedor(
                         ticketSeleccionado.id,
                         ticketSeleccionado.numero_caso,
                         ticketSeleccionado.cliente,
@@ -1157,7 +1157,7 @@ export default function Tickets() {
                       </p>
                     ) : (
                       mensajes.map((m) => (
-                        <ChatBubble key={m.id} $isMine={m.esTecnico}>
+                        <ChatBubble key={m.id} $isMine={m.esvendedor}>
                           <div>{m.texto}</div>
 
                           {m.tipo === "request" && (
@@ -1209,7 +1209,7 @@ export default function Tickets() {
 
                           <ChatMeta>
                             {new Date(m.fecha).toLocaleString()} —{" "}
-                            {m.esTecnico ? "Técnico" : m.autor || "Sistema"}
+                            {m.esvendedor ? "Técnico" : m.autor || "Sistema"}
                           </ChatMeta>
                         </ChatBubble>
                       ))

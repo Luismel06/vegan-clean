@@ -152,13 +152,13 @@ export default function LoginAdmin() {
         // Redirigir según el rol
         if (["admin", "administrador"].includes(usuario.rol)) {
   navigate("/admin", { replace: true });
-} else if (["tecnico", "técnico"].includes(usuario.rol)) {
-  navigate("/tecnico/tickets", { replace: true });
+} else if (["vendedor", "Vendedor"].includes(usuario.rol)) {
+  navigate("/vendedor/tickets", { replace: true });
 } else {
   Swal.fire({
     icon: "warning",
     title: "Rol no válido",
-    text: `Tu cuenta (${usuario.rol}) no tiene un rol asignado válido.`,
+    text: `Tu cuenta no tiene un rol asignado válido.`,
     confirmButtonColor: "#00bcd4",
   });
 }

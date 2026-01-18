@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { useAuthStore } from "../../store/useAuthStore";
+import { useAuthStore } from "../../store/useAuthStore.jsx";
 import Swal from "sweetalert2";
 import {
   Phone,
@@ -316,7 +316,7 @@ const EquiposTable = styled.table`
 
 /* === COMPONENTE PRINCIPAL === */
 
-export default function TicketTecnicoDetalle() {
+export default function TicketVendedorDetalle() {
   const { id } = useParams();
   const { user } = useAuthStore();
 
@@ -456,7 +456,7 @@ export default function TicketTecnicoDetalle() {
 
   async function fetchRequests() {
     const { data } = await supabase
-      .from("tecnico_requests")
+      .from("vendedor_requests")
       .select("*")
       .eq("ticket_id", id)
       .order("fecha_solicitud", { ascending: true });
@@ -506,12 +506,12 @@ export default function TicketTecnicoDetalle() {
 
     const evidenciasUrls = await subirArchivos();
 
-    await supabase.from("tecnico_requests").insert([
+    await supabase.from("vendedor_requests").insert([
       {
         ticket_id: Number(id),
-        tecnico_email: user.email,
+        vendedor_email: user.email,
         estado_solicitado: estadoSolicitado,
-        nota_tecnico: nota,
+        nota_vendedor: nota,
         evidencias: evidenciasUrls,
       },
     ]);
@@ -520,7 +520,7 @@ export default function TicketTecnicoDetalle() {
       {
         ticket_id: Number(id),
         usuario: user.email,
-        rol: "tecnico",
+        rol: "vendedor",
         accion: "estado_solicitado",
         descripcion: `Estado solicitado: "${estadoSolicitado}". Detalle: ${nota}`,
       },
@@ -541,7 +541,7 @@ export default function TicketTecnicoDetalle() {
       id: `h-${h.id}`,
       fecha: h.fecha,
       autor: h.rol || "sistema",
-      esTecnico: h.rol === "tecnico",
+      esvendedor: h.rol === "vendedor",
       texto: h.descripcion,
       tipo: "historial",
     }));
@@ -549,9 +549,9 @@ export default function TicketTecnicoDetalle() {
     const reqs = requests?.map((r) => ({
       id: `r-${r.id}`,
       fecha: r.fecha_solicitud,
-      autor: "tecnico",
-      esTecnico: true,
-      texto: r.nota_tecnico,
+      autor: "vendedor",
+      esvendedor: true,
+      texto: r.nota_vendedor,
       tipo: "request",
       estadoSolicitado: r.estado_solicitado,
       estadoRequest: r.estado_request || "pendiente",
@@ -762,7 +762,7 @@ export default function TicketTecnicoDetalle() {
                 </p>
               ) : (
                 mensajes.map((m) => (
-                  <ChatBubble key={m.id} $isMine={m.esTecnico}>
+                  <ChatBubble key={m.id} $isMine={m.esvendedor}>
                     <div>{m.texto}</div>
 
                     {m.tipo === "request" && (
@@ -780,7 +780,7 @@ export default function TicketTecnicoDetalle() {
 
                     <ChatMeta>
                       {new Date(m.fecha).toLocaleString()} —{" "}
-                      {m.esTecnico ? "Tú" : m.autor}
+                      {m.esvendedor ? "Tú" : m.autor}
                     </ChatMeta>
                   </ChatBubble>
                 ))

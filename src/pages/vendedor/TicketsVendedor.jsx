@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { useAuthStore } from "../../store/useAuthStore";
+import { useAuthStore } from "../../store/useAuthStore.jsx";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, Clock, MapPin } from "lucide-react";
 
@@ -107,7 +107,7 @@ const TicketFooter = styled.div`
   opacity: 0.8;
 `;
 
-export default function TicketsTecnico() {
+export default function TicketsVendedor() {
   const { user } = useAuthStore();
   const [tickets, setTickets] = useState([]);
   const navigate = useNavigate();
@@ -119,12 +119,12 @@ export default function TicketsTecnico() {
   }, [user]);
 
   async function fetchTickets() {
-    const tecnicoEmail = user.email;
+    const vendedorEmail = user.email;
 
     const { data, error } = await supabase
       .from("solicitudes")
       .select("*")
-      .ilike("tecnico_asignado", `%${tecnicoEmail}%`)
+      .ilike("vendedor_asignado", `%${vendedorEmail}%`)
       .order("fecha", { ascending: false });
 
     if (error) {
@@ -157,7 +157,7 @@ export default function TicketsTecnico() {
               <TicketBubble
                 key={t.id}
                 estado={formatearEstadoTicket(t)}
-                onClick={() => navigate(`/tecnico/tickets/${t.id}`)}
+                onClick={() => navigate(`/vendedor/tickets/${t.id}`)}
               >
                 <TicketHeader>
                   <Cliente>{t.cliente}</Cliente>

@@ -12,7 +12,7 @@ import {
   Moon,
   Menu,
 } from "lucide-react";
-import { useTheme } from "../context/ThemeContext"; // ← usa tu propio hook
+import { useTheme } from "../context/ThemeContext.jsx"; // ← usa tu propio hook
 import logo from "../assets/logo_veganclean.png";
 
 // === GLOBAL FIX ===
@@ -214,7 +214,7 @@ const MainContent = styled.main`
   padding: 1.5rem;
 `;
 
-export function TecnicoLayout() {
+export function VendedorLayout() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme(); // ← usa tu contexto real
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -239,7 +239,7 @@ export function TecnicoLayout() {
       .eq("email", data.user.email)
       .single();
 
-    if (!perfil || perfil.rol !== "tecnico") {
+    if (!perfil || perfil.rol !== "vendedor") {
       Swal.fire({
         icon: "error",
         title: "Acceso denegado",
@@ -280,15 +280,15 @@ export function TecnicoLayout() {
           <LogoText>Vega Clean</LogoText>
 
           <MenuContainer>
-            <MenuItem onClick={() => { navigate("/tecnico/dashboard"); setSidebarOpen(false); }}>
+            <MenuItem onClick={() => { navigate("/vendedor/dashboard"); setSidebarOpen(false); }}>
               <Home size={18} /> Dashboard
             </MenuItem>
 
-            <MenuItem onClick={() => { navigate("/tecnico/tickets"); setSidebarOpen(false); }}>
+            <MenuItem onClick={() => { navigate("/vendedor/tickets"); setSidebarOpen(false); }}>
               <ClipboardList size={18} /> Tickets
             </MenuItem>
 
-            <MenuItem onClick={() => { navigate("/tecnico/calendario"); setSidebarOpen(false); }}>
+            <MenuItem onClick={() => { navigate("/vendedor/calendario"); setSidebarOpen(false); }}>
               <Calendar size={18} /> Calendario
             </MenuItem>
           </MenuContainer>

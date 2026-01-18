@@ -717,7 +717,7 @@ export default function Servicios() {
           fecha_creacion: data.fecha ? new Date(data.fecha).toLocaleString() : "-",
           fecha_agendada: data.fecha_agendada ? new Date(data.fecha_agendada).toLocaleDateString() : "-",
           hora_agendada: data.hora_agendada || "-",
-          tecnico: data.tecnico_asignado || "Pendiente de asignar",
+          vendedor: data.vendedor_asignado || "Pendiente de asignar",
           direccion: data.direccion || "-",
         });
       }
@@ -896,7 +896,7 @@ export default function Servicios() {
                 </CaseRow>
                 <CaseRow>
                   <span>Técnico asignado:</span>
-                  <span>{caseResult.tecnico}</span>
+                  <span>{caseResult.vendedor}</span>
                 </CaseRow>
                 <CaseRow>
                   <span>Dirección:</span>

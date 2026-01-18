@@ -6,7 +6,7 @@ import RouteGuard from "../components/RouteGuard";
 // --- Layouts ---
 import { ClienteLayout } from "../layouts/ClienteLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
-import { TecnicoLayout } from "../layouts/TecnicoLayout";
+import { VendedorLayout } from "../layouts/VendedorLayout";
 
 // --- Páginas del cliente ---
 import Inicio from "../pages/cliente/Inicio";
@@ -20,16 +20,17 @@ import Dashboard from "../pages/admin/Dashboard";
 import Usuarios from "../pages/admin/Usuarios";
 import Tickets from "../pages/admin/Tickets";
 import Productos from "../pages/admin/Productos";
-import ServiciosAdmin from "../pages/admin/Servicios";
+//import ServiciosAdmin from "../pages/admin/Servicios";---> ya no se usara (lo dejo comentado por si acaso)
+import Equipos from "../pages/admin/Equipos";
 import PublicacionesAdmin from "../pages/admin/Publicaciones";
 import Cotizaciones from "../pages/admin/Cotizaciones";
 import VistaCotizacion from "../pages/admin/VistaCotizacion";
 
 // --- Páginas técnico ---
-import TicketsTecnico from "../pages/tecnico/TicketsTecnico";
-import CalendarioTecnico from "../pages/tecnico/CalendarioTecnico";
-import TicketTecnicoDetalle from "../pages/tecnico/TicketTecnicoDetalle";
-import DashboardTecnico from "../pages/tecnico/DashboardTecnico";
+import TicketsVendedor from "../pages/vendedor/TicketsVendedor";
+import CalendarioVendedor from "../pages/vendedor/CalendarioVendedor";
+import TicketVendedorDetalle from "../pages/vendedor/TicketVendedorDetalle";
+import DashboardVendedor from "../pages/vendedor/DashboardVendedor";
 
 // --- Login ---
 import LoginAdmin from "../pages/admin/LoginAdmin";
@@ -95,26 +96,27 @@ const router = createBrowserRouter([
       { path: "/admin/usuarios", element: <Usuarios /> },
       { path: "/admin/tickets", element: <Tickets /> },
       { path: "/admin/productos", element: <Productos /> },
-      { path: "/admin/servicios", element: <ServiciosAdmin /> },
+      //{ path: "/admin/servicios", element: <ServiciosAdmin /> },
+      { path: "/admin/equipos", element: <Equipos /> },
       { path: "/admin/publicaciones", element: <PublicacionesAdmin /> },
       { path: "/admin/cotizaciones", element: <Cotizaciones /> },
       { path: "/admin/cotizaciones/:id", element: <VistaCotizacion /> },
     ],
   },
 
-  // === TÉCNICO (solo tecnico) ===
+  // === TÉCNICO (solo vendedor) ===
   {
-    path: "/tecnico",
+    path: "/vendedor",
     element: (
-      <RouteGuard allowed={["tecnico"]}>
-        <TecnicoLayout />
+      <RouteGuard allowed={["vendedor"]}>
+        <VendedorLayout />
       </RouteGuard>
     ),
     children: [
-      { path: "/tecnico/dashboard", element: <DashboardTecnico /> },
-     { path: "/tecnico/tickets", element: <TicketsTecnico /> },
-    { path: "/tecnico/tickets/:id", element: <TicketTecnicoDetalle /> },
-    { path: "/tecnico/calendario", element: <CalendarioTecnico /> },
+      { path: "/vendedor/dashboard", element: <DashboardVendedor /> },
+     { path: "/vendedor/tickets", element: <TicketsVendedor /> },
+    { path: "/vendedor/tickets/:id", element: <TicketVendedorDetalle /> },
+    { path: "/vendedor/calendario", element: <CalendarioVendedor /> },
     ],
   },
 

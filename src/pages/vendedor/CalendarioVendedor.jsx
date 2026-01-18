@@ -4,7 +4,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { useAuthStore } from "../../store/useAuthStore";
+import { useAuthStore } from "../../store/useAuthStore.jsx";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import { useNavigate } from "react-router-dom";
 
@@ -83,7 +83,7 @@ const btnStyle = {
 //   COMPONENTE PRINCIPAL
 // ============================
 
-export default function CalendarioTecnico() {
+export default function CalendarioVendedor() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
@@ -99,7 +99,7 @@ export default function CalendarioTecnico() {
   }, [user]);
 
   async function fetchEventos() {
-    const tecnicoEmail = user.email;
+    const vendedorEmail = user.email;
 
     const { data, error } = await supabase
       .from("solicitudes")
@@ -114,7 +114,7 @@ export default function CalendarioTecnico() {
         estado_solicitud,
         servicio:servicio_id ( nombre )
       `)
-      .ilike("tecnico_asignado", `%${tecnicoEmail}%`);
+      .ilike("vendedor_asignado", `%${vendedorEmail}%`);
 
     if (error) {
       console.error("Error cargando eventos:", error);
@@ -255,7 +255,7 @@ export default function CalendarioTecnico() {
                 {/* Ver ticket */}
                 <button
                   style={btnStyle}
-                  onClick={() => navigate(`/tecnico/tickets/${selectedEvent.id}`)}
+                  onClick={() => navigate(`/vendedor/tickets/${selectedEvent.id}`)}
                 >
                   🔧 Ver ticket completo
                 </button>

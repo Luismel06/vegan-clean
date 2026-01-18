@@ -1,3 +1,4 @@
+// src/pages/admin/Equipos.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
@@ -59,6 +60,7 @@ const Button = styled.button`
   gap: 0.5rem;
   cursor: pointer;
   transition: 0.25s;
+
   &:hover {
     opacity: 0.92;
     transform: translateY(-1px);
@@ -168,6 +170,7 @@ const Select = styled.select`
 const ClearFiltersBtn = styled(SecondaryButton)`
   justify-content: center;
 `;
+
 
 const TableWrapper = styled.div`
   width: 100%;
@@ -324,8 +327,8 @@ async function uploadImageToBucket(bucket, file) {
 }
 
 /* ==================== COMPONENTE ==================== */
-export default function Productos() {
-  const [productos, setProductos] = useState([]);
+export default function Equipos() {
+  const [equipos, setEquipos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -352,10 +355,10 @@ export default function Productos() {
   const [imagePath, setImagePath] = useState(""); // lo que está en BD
   const [imagePreview, setImagePreview] = useState("");
 
-const filtered = useMemo(() => {
+  const filtered = useMemo(() => {
   const q = query.trim().toLowerCase();
 
-  return (productos || []).filter((p) => {
+  return (equipos || []).filter((p) => {
     // 1) filtro texto (como ya lo haces)
     const nombre = (p.nombre || "").toLowerCase();
     const proveedor = (p.proveedor || "").toLowerCase();
@@ -387,63 +390,64 @@ const filtered = useMemo(() => {
 
     return matchProveedor && matchCategoria && matchMarca && matchModelo;
   });
-}, [query, productos, fProveedor, fCategoria, fMarca, fModelo]);
+}, [query, equipos, fProveedor, fCategoria, fMarca, fModelo]);
+
 
   const proveedores = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.proveedor || "").trim()).filter(Boolean));
+  const set = new Set((equipos || []).map((p) => (p.proveedor || "").trim()).filter(Boolean));
   return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+}, [equipos]);
 
 const categorias = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.categoria || "").trim()).filter(Boolean));
+  const set = new Set((equipos || []).map((p) => (p.categoria || "").trim()).filter(Boolean));
   return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+}, [equipos]);
 
 const marcas = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.marca || "").trim()).filter(Boolean));
+  const set = new Set((equipos || []).map((p) => (p.marca || "").trim()).filter(Boolean));
   return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+}, [equipos]);
 
 const modelos = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.modelo || "").trim()).filter(Boolean));
+  const set = new Set((equipos || []).map((p) => (p.modelo || "").trim()).filter(Boolean));
   return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+}, [equipos]);
 
 
   /* === MÉTRICAS === */
-  const totalProductos = productos.length;
-  const valorInventario = productos.reduce(
+  const total = equipos.length;
+  const valorInventario = equipos.reduce(
     (acc, p) => acc + (p.cantidad || 0) * (p.precio || 0),
     0
   );
-  const productoMasCaro = productos.reduce(
+  const masCaro = equipos.reduce(
     (max, p) => (p.precio > (max?.precio || 0) ? p : max),
     null
   );
-  const productoMenorStock = productos.reduce(
+  const menorStock = equipos.reduce(
     (min, p) => (p.cantidad < (min?.cantidad || Infinity) ? p : min),
     null
   );
 
   useEffect(() => {
-    fetchProductos();
+    fetchEquipos();
   }, []);
 
-  async function fetchProductos() {
+  async function fetchEquipos() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("productos")
+        .from("equipos")
         .select("*")
         .order("id", { ascending: false });
 
       if (error) throw error;
-      setProductos(data ?? []);
+      setEquipos(data ?? []);
     } catch (err) {
-      console.error("fetchProductos error:", err);
+      console.error("fetchEquipos error:", err);
       Swal.fire({
         icon: "error",
-        title: "No se pudieron cargar los productos",
+        title: "No se pudieron cargar los equipos",
         text:
           err?.message ||
           "Verifica RLS/policies o que tu app apunte al mismo proyecto de Supabase.",
@@ -475,7 +479,8 @@ const modelos = useMemo(() => {
   function validate(f) {
     if (!f.nombre.trim()) return "El nombre es obligatorio.";
     if (!f.proveedor.trim()) return "El proveedor es obligatorio.";
-    if (f.cantidad === "" || isNaN(f.cantidad)) return "La cantidad debe ser numérica.";
+    if (f.cantidad === "" || isNaN(f.cantidad))
+      return "La cantidad debe ser numérica.";
     if (f.precio === "" || isNaN(f.precio)) return "El precio debe ser numérico.";
     return null;
   }
@@ -483,7 +488,7 @@ const modelos = useMemo(() => {
   function onPickImage(file) {
     setImageFile(file || null);
     if (!file) {
-      setImagePreview(imagePath ? getPublicImageUrl("productos", imagePath) : "");
+      setImagePreview(imagePath ? getPublicImageUrl("equipos", imagePath) : "");
       return;
     }
     const url = URL.createObjectURL(file);
@@ -505,7 +510,7 @@ const modelos = useMemo(() => {
     try {
       let uploadedPath = null;
       if (imageFile) {
-        uploadedPath = await uploadImageToBucket("productos", imageFile);
+        uploadedPath = await uploadImageToBucket("equipos", imageFile);
       }
 
       const payload = {
@@ -521,19 +526,19 @@ const modelos = useMemo(() => {
       };
 
       const { data, error } = await supabase
-        .from("productos")
+        .from("equipos")
         .insert([payload])
         .select()
         .single();
 
       if (error) throw error;
 
-      setProductos((prev) => [data, ...prev]);
+      setEquipos((prev) => [data, ...prev]);
       resetForm();
 
       Swal.fire({
         icon: "success",
-        title: "Producto agregado",
+        title: "Equipo agregado",
         timer: 1300,
         showConfirmButton: false,
       });
@@ -542,7 +547,7 @@ const modelos = useMemo(() => {
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: err2?.message || "No se pudo crear el producto.",
+        text: err2?.message || "No se pudo crear el equipo.",
         confirmButtonColor: "#00c27a",
       });
     }
@@ -563,7 +568,7 @@ const modelos = useMemo(() => {
     try {
       let uploadedPath = imagePath || null;
       if (imageFile) {
-        uploadedPath = await uploadImageToBucket("productos", imageFile);
+        uploadedPath = await uploadImageToBucket("equipos", imageFile);
       }
 
       const payload = {
@@ -579,7 +584,7 @@ const modelos = useMemo(() => {
       };
 
       const { data, error } = await supabase
-        .from("productos")
+        .from("equipos")
         .update(payload)
         .eq("id", editingId)
         .select()
@@ -587,12 +592,12 @@ const modelos = useMemo(() => {
 
       if (error) throw error;
 
-      setProductos((prev) => prev.map((p) => (p.id === editingId ? data : p)));
+      setEquipos((prev) => prev.map((p) => (p.id === editingId ? data : p)));
       resetForm();
 
       Swal.fire({
         icon: "success",
-        title: "Producto actualizado",
+        title: "Equipo actualizado",
         timer: 1300,
         showConfirmButton: false,
       });
@@ -601,7 +606,7 @@ const modelos = useMemo(() => {
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: err2?.message || "No se pudo actualizar el producto.",
+        text: err2?.message || "No se pudo actualizar el equipo.",
         confirmButtonColor: "#00c27a",
       });
     }
@@ -610,7 +615,7 @@ const modelos = useMemo(() => {
   async function onDelete(id) {
     const res = await Swal.fire({
       icon: "warning",
-      title: "¿Eliminar producto?",
+      title: "¿Eliminar equipo?",
       text: "Esta acción no se puede deshacer.",
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
@@ -621,14 +626,14 @@ const modelos = useMemo(() => {
     if (!res.isConfirmed) return;
 
     try {
-      const { error } = await supabase.from("productos").delete().eq("id", id);
+      const { error } = await supabase.from("equipos").delete().eq("id", id);
       if (error) throw error;
 
-      setProductos((prev) => prev.filter((p) => p.id !== id));
+      setEquipos((prev) => prev.filter((p) => p.id !== id));
 
       Swal.fire({
         icon: "success",
-        title: "Producto eliminado",
+        title: "Equipo eliminado",
         timer: 1100,
         showConfirmButton: false,
       });
@@ -637,7 +642,7 @@ const modelos = useMemo(() => {
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: err2?.message || "No se pudo eliminar el producto.",
+        text: err2?.message || "No se pudo eliminar el equipo.",
         confirmButtonColor: "#00c27a",
       });
     }
@@ -646,15 +651,15 @@ const modelos = useMemo(() => {
   return (
     <Wrapper>
       <Header>
-        <Title>Productos</Title>
+        <Title>Equipos</Title>
         <Actions>
-          <SecondaryButton onClick={fetchProductos}>
+          <SecondaryButton onClick={fetchEquipos}>
             <RefreshCw size={18} /> Recargar
           </SecondaryButton>
 
           {!adding && editingId === null && (
             <Button onClick={() => setAdding(true)}>
-              <Plus size={18} /> Nuevo producto
+              <Plus size={18} /> Nuevo equipo
             </Button>
           )}
         </Actions>
@@ -667,8 +672,8 @@ const modelos = useMemo(() => {
             <Package size={22} />
           </IconWrap>
           <MetricInfo>
-            <MetricValue>{totalProductos}</MetricValue>
-            <MetricLabel>Total de productos</MetricLabel>
+            <MetricValue>{total}</MetricValue>
+            <MetricLabel>Total de equipos</MetricLabel>
           </MetricInfo>
         </MetricCard>
 
@@ -687,21 +692,19 @@ const modelos = useMemo(() => {
           </MetricInfo>
         </MetricCard>
 
-        {productoMenorStock && (
+        {menorStock && (
           <MetricCard>
             <IconWrap>
               <AlertTriangle size={22} />
             </IconWrap>
             <MetricInfo>
-              <MetricValue>{productoMenorStock.nombre}</MetricValue>
-              <MetricLabel>
-                Menor stock ({productoMenorStock.cantidad})
-              </MetricLabel>
+              <MetricValue>{menorStock.nombre}</MetricValue>
+              <MetricLabel>Menor stock ({menorStock.cantidad})</MetricLabel>
             </MetricInfo>
           </MetricCard>
         )}
 
-        {productoMasCaro && (
+        {masCaro && (
           <MetricCard>
             <IconWrap>
               <TrendingUp size={22} />
@@ -709,11 +712,11 @@ const modelos = useMemo(() => {
             <MetricInfo>
               <MetricValue>
                 RD$
-                {Number(productoMasCaro.precio || 0).toLocaleString("es-DO", {
+                {Number(masCaro.precio || 0).toLocaleString("es-DO", {
                   minimumFractionDigits: 2,
                 })}
               </MetricValue>
-              <MetricLabel>Más caro ({productoMasCaro.nombre})</MetricLabel>
+              <MetricLabel>Más caro ({masCaro.nombre})</MetricLabel>
             </MetricInfo>
           </MetricCard>
         )}
@@ -776,14 +779,13 @@ const modelos = useMemo(() => {
   </ClearFiltersBtn>
 </FiltersRow>
 
-
       {/* === FORMULARIO === */}
       {(adding || editingId !== null) && (
         <Form onSubmit={editingId ? onUpdate : onCreate}>
           <Field>
             <Label>Nombre</Label>
             <Input
-              placeholder="Nombre del producto"
+              placeholder="Nombre del equipo"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
@@ -825,7 +827,7 @@ const modelos = useMemo(() => {
               type="text"
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
-              placeholder="Ej: Zafacones, Detergentes..."
+              placeholder="Ej: Aspiradoras, Carritos, Mopas..."
             />
           </Field>
 
@@ -835,7 +837,7 @@ const modelos = useMemo(() => {
               type="text"
               value={marca}
               onChange={(e) => setMarca(e.target.value)}
-              placeholder="Ej: Vega Clean..."
+              placeholder="Ej: VegaClean, Karcher..."
             />
           </Field>
 
@@ -845,16 +847,18 @@ const modelos = useMemo(() => {
               type="text"
               value={modelo}
               onChange={(e) => setModelo(e.target.value)}
-              placeholder="Ej: Mediano..."
+              placeholder="Ej: 3 niveles..."
             />
           </Field>
 
           <Field style={{ gridColumn: "1 / -1" }}>
             <Label>Descripción</Label>
             <TextArea
-              placeholder="Descripción del producto..."
+              placeholder="Descripción del equipo..."
               value={form.descripcion}
-              onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, descripcion: e.target.value })
+              }
             />
           </Field>
 
@@ -863,13 +867,15 @@ const modelos = useMemo(() => {
             <ImgRow>
               <SecondaryButton
                 type="button"
-                onClick={() => document.getElementById("producto_img_input")?.click()}
+                onClick={() =>
+                  document.getElementById("equipo_img_input")?.click()
+                }
               >
                 <ImageIcon size={18} /> Seleccionar imagen
               </SecondaryButton>
 
               <input
-                id="producto_img_input"
+                id="equipo_img_input"
                 type="file"
                 accept="image/*"
                 style={{ display: "none" }}
@@ -878,7 +884,9 @@ const modelos = useMemo(() => {
 
               {(imagePreview || imagePath) && (
                 <ImgPreview
-                  src={imagePreview || getPublicImageUrl("productos", imagePath)}
+                  src={
+                    imagePreview || getPublicImageUrl("equipos", imagePath)
+                  }
                   alt="preview"
                 />
               )}
@@ -899,9 +907,9 @@ const modelos = useMemo(() => {
       {/* === TABLA === */}
       <TableWrapper>
         {loading ? (
-          <Empty>Cargando productos...</Empty>
+          <Empty>Cargando equipos...</Empty>
         ) : filtered.length === 0 ? (
-          <Empty>No hay productos registrados.</Empty>
+          <Empty>No hay equipos registrados.</Empty>
         ) : (
           <Table>
             <thead>
@@ -924,20 +932,28 @@ const modelos = useMemo(() => {
                   <td>
                     <ImgPreview
                       src={
-                        getPublicImageUrl("productos", p.imagen_url) ||
-                        "/placeholder-producto.png"
+                        getPublicImageUrl("equipos", p.imagen_url) ||
+                        "/placeholder-equipo.png"
                       }
-                      alt={p.nombre || "producto"}
+                      alt={p.nombre || "equipo"}
                     />
                   </td>
+
                   <td>
                     <div style={{ fontWeight: 800 }}>{p.nombre}</div>
                     {p.descripcion && (
-                      <div style={{ opacity: 0.85, fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                      <div
+                        style={{
+                          opacity: 0.85,
+                          fontSize: "0.9rem",
+                          marginTop: "0.25rem",
+                        }}
+                      >
                         {p.descripcion}
                       </div>
                     )}
                   </td>
+
                   <td>{p.proveedor}</td>
                   <td>{p.categoria || "-"}</td>
                   <td>{p.marca || "-"}</td>
@@ -949,6 +965,7 @@ const modelos = useMemo(() => {
                       minimumFractionDigits: 2,
                     })}
                   </td>
+
                   <td>
                     <RowActions>
                       <IconAction
@@ -969,7 +986,9 @@ const modelos = useMemo(() => {
                           setImageFile(null);
                           setImagePath(p.imagen_url || "");
                           setImagePreview(
-                            p.imagen_url ? getPublicImageUrl("productos", p.imagen_url) : ""
+                            p.imagen_url
+                              ? getPublicImageUrl("equipos", p.imagen_url)
+                              : ""
                           );
                         }}
                       >

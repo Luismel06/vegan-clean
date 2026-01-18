@@ -138,7 +138,7 @@ const DeleteButton = styled.button`
 export default function Usuarios() {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
-  const [rol, setRol] = useState("tecnico");
+  const [rol, setRol] = useState("vendedor");
   const [usuarios, setUsuarios] = useState([]);
 
   // === Leer usuarios ===
@@ -169,7 +169,7 @@ export default function Usuarios() {
       Swal.fire("Usuario creado", "El nuevo usuario fue agregado.", "success");
       setNombre("");
       setEmail("");
-      setRol("tecnico");
+      setRol("vendedor");
       fetchUsuarios();
     } catch (error) {
       Swal.fire("Error", "No se pudo crear el usuario.", "error");
@@ -223,7 +223,7 @@ export default function Usuarios() {
 
         <Label>Rol</Label>
         <Select value={rol} onChange={(e) => setRol(e.target.value)}>
-          <option value="tecnico">Técnico</option>
+          <option value="vendedor">Técnico</option>
           <option value="administrador">Administrador</option>
         </Select>
 
