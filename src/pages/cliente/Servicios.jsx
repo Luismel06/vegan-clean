@@ -13,7 +13,6 @@ const Container = styled.section`
   min-height: 100vh;
   color: ${({ theme }) => theme.text};
   padding: 6rem 1rem 5.5rem; /* espacio sticky bar */
- */
   text-align: center;
 `;
 
@@ -192,6 +191,42 @@ const ProductGrid = styled.div`
   gap: 1rem;
 `;
 
+/* === IMAGEN CON EFECTO "ZOOM OUT / FULL VIEW" === */
+const ImgWrap = styled.div`
+  width: 100%;
+  height: 180px;
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.08);
+`;
+
+/* Capa A: cover (default) */
+const ImgCover = styled.img`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 320ms ease, opacity 220ms ease, filter 320ms ease;
+`;
+
+/* Capa B: contain (muestra completa) */
+const ImgContain = styled.img`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  transform: scale(0.98);
+  opacity: 0;
+  transition: transform 320ms ease, opacity 220ms ease;
+`;
+
+/* ---- Tarjeta ---- */
 const ProductCard = styled.div`
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
@@ -211,14 +246,18 @@ const ProductCard = styled.div`
     transform: translateY(-2px);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
   }
-`;
 
-const ProductImg = styled.img`
-  width: 100%;
-  height: 140px;
-  object-fit: cover;
-  display: block;
-  background: rgba(0, 0, 0, 0.06);
+  /* hover: cambia a "ver completa" */
+  &:hover ${ImgCover} {
+    opacity: 0;
+    transform: scale(1.08);
+    filter: saturate(1.05) contrast(1.05);
+  }
+
+  &:hover ${ImgContain} {
+    opacity: 1;
+    transform: scale(1);
+  }
 `;
 
 const ProductBody = styled.div`
@@ -448,41 +487,32 @@ const QuoteBtn = styled.button`
 const makeKey = (tipo, id) => `${tipo}:${id}`;
 const isUrl = (v) => typeof v === "string" && /^https?:\/\//i.test(v);
 
-// Si imagen_url es URL completa => se usa.
-// Si imagen_url es path del bucket => se convierte a publicUrl usando supabase.storage
 const getImageUrl = (bucket, imagen_url) => {
   if (!imagen_url) return "";
   if (isUrl(imagen_url)) return imagen_url;
-
   const { data } = supabase.storage.from(bucket).getPublicUrl(imagen_url);
   return data?.publicUrl || "";
 };
 
 // ===================== COMPONENTE =====================
 export default function Servicios() {
-  // tabs
-  const [tab, setTab] = useState("productos"); // "productos" | "equipos"
+  const [tab, setTab] = useState("productos"); // productos | equipos
 
-  // productos
   const [productos, setProductos] = useState([]);
   const [loadingProductos, setLoadingProductos] = useState(false);
   const [categoriaFiltroProd, setCategoriaFiltroProd] = useState("");
   const [marcaFiltroProd, setMarcaFiltroProd] = useState("");
 
-  // equipos
   const [equipos, setEquipos] = useState([]);
   const [loadingEquipos, setLoadingEquipos] = useState(false);
   const [categoriaFiltroEq, setCategoriaFiltroEq] = useState("");
   const [marcaFiltroEq, setMarcaFiltroEq] = useState("");
 
-  // carrito persistente
   const [carrito, setCarrito] = useState({});
 
-  // form cotización
   const [mostrarFormularioCot, setMostrarFormularioCot] = useState(false);
   const [tipoCliente, setTipoCliente] = useState("persona"); // persona | empresa
 
-  // consulta de caso
   const [caseNumero, setCaseNumero] = useState("");
   const [caseResult, setCaseResult] = useState(null);
   const [caseLoading, setCaseLoading] = useState(false);
@@ -494,9 +524,7 @@ export default function Servicios() {
 
       const { data, error } = await supabase
         .from("productos")
-        .select(
-          "id, nombre, descripcion, categoria, marca, modelo, proveedor, precio, imagen_url"
-        )
+        .select("id, nombre, descripcion, categoria, marca, modelo, proveedor, precio, imagen_url")
         .order("id", { ascending: true });
 
       if (error) {
@@ -525,9 +553,7 @@ export default function Servicios() {
 
       const { data, error } = await supabase
         .from("equipos")
-        .select(
-          "id, nombre, descripcion, categoria, marca, modelo, proveedor, precio, imagen_url"
-        )
+        .select("id, nombre, descripcion, categoria, marca, modelo, proveedor, precio, imagen_url")
         .order("id", { ascending: true });
 
       if (error) {
@@ -811,8 +837,6 @@ export default function Servicios() {
 
   return (
     <Container>
-      <Title>Catálogo Vega Clean</Title>
-
       {/* Consulta de caso */}
       <CaseCard>
         <CaseTitle>Consulta el estado de tu caso</CaseTitle>
@@ -898,7 +922,9 @@ export default function Servicios() {
         <Content initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <SectionHead>
             <h3>{tab === "productos" ? "Productos" : "Equipos"}</h3>
-            <p>Selecciona cantidades y luego pulsa <strong>Solicitar cotización</strong>.</p>
+            <p>
+              Selecciona cantidades y luego pulsa <strong>Solicitar cotización</strong>.
+            </p>
           </SectionHead>
 
           {/* Filtros */}
@@ -906,14 +932,18 @@ export default function Servicios() {
             <SelectFilter value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
               <option value="">Todas las categorías</option>
               {categorias.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </SelectFilter>
 
             <SelectFilter value={marcaFiltro} onChange={(e) => setMarcaFiltro(e.target.value)}>
               <option value="">Todas las marcas</option>
               {marcas.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </SelectFilter>
           </FiltersRow>
@@ -929,13 +959,26 @@ export default function Servicios() {
                 const key = makeKey(tipoActual, p.id);
                 const qty = carrito[key]?.qty || 0;
 
+                const imgSrc = p._img || "/placeholder-product.png";
+
                 return (
                   <ProductCard key={p.id} $selected={qty > 0}>
-                    <ProductImg
-                      src={p._img || "/placeholder-product.png"}
-                      alt={p.nombre}
-                      onError={(e) => { e.currentTarget.src = "/placeholder-product.png"; }}
-                    />
+                    <ImgWrap>
+                      <ImgCover
+                        src={imgSrc}
+                        alt={p.nombre}
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder-product.png";
+                        }}
+                      />
+                      <ImgContain
+                        src={imgSrc}
+                        alt={p.nombre}
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder-product.png";
+                        }}
+                      />
+                    </ImgWrap>
 
                     <ProductBody>
                       <ProductTitle>{p.nombre}</ProductTitle>
