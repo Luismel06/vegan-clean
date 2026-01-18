@@ -2,7 +2,6 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 
 const Container = styled.section`
-  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   width: 100%;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};
@@ -34,8 +33,8 @@ const Card = styled(motion.div)`
   flex: 1 1 300px;
  background: ${({ theme }) =>
     theme.name === "light"
-      ? "rgba(22, 154, 10, 0.6)"
-      : "rgba(37, 169, 4, 0.5)"};
+      ? "rgba(230, 242, 229, 0.6)"
+      : "rgba(108, 142, 99, 0.5)"};
   backdrop-filter: blur(14px);
   border-radius: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
@@ -47,7 +46,7 @@ const Card = styled(motion.div)`
   border: 1px solid ${({ theme }) => theme.border};
 
   h3 {
-    color: #73a6f3;
+    color: ${({ theme }) => theme.accent};
     margin-bottom: 0.5rem;
   }
 

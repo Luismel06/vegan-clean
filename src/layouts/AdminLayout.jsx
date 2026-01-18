@@ -158,7 +158,7 @@ const Email = styled.span`
 
 const LogoutButton = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #030778;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   padding: 0.6rem 1rem;

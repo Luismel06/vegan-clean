@@ -10,7 +10,7 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
+  background-color: ${({ theme }) => theme.background};
 `;
 
 const Card = styled.div`

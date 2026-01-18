@@ -49,7 +49,7 @@ const Actions = styled.div`
 `;
 
 const Button = styled.button`
-  background-color: #a3f3be;
+  background-color: ${({ theme }) => theme.accent};
   border: none;
   border-radius: 10px;
   padding: 0.7rem 1rem;

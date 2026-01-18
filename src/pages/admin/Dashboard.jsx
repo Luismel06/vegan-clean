@@ -46,6 +46,7 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
+  color: ${({ theme }) => theme.accent};
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 0.5rem;

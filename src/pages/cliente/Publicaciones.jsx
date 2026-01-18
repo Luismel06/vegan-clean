@@ -5,7 +5,7 @@ import PublicacionCard from "../../components/templates/PublicacionCard";
 import { Loader2 } from "lucide-react";
 
 const Container = styled.div`
-background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
+background-color: ${({ theme }) => theme.background};
   padding: calc(72px + 2rem) 2rem 3rem;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};

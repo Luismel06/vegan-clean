@@ -8,7 +8,7 @@ import { supabase } from "../../supabase/supabase.config";
 
 // ===================== ESTILOS =====================
 const Container = styled.section`
-  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
+  background: ${({ theme }) => theme.background};
   width: 100%;
   min-height: 100vh;
   color: ${({ theme }) => theme.text};
@@ -18,7 +18,7 @@ const Container = styled.section`
 
 const Title = styled.h2`
   margin: 0 0 1rem;
-  color: #0591e9;
+  color: ${({ theme }) => theme.accent};
 `;
 
 const CardShell = styled.div`
@@ -132,7 +132,7 @@ const Tabs = styled.div`
 const TabButton = styled.button`
   background-color: ${({ $active, theme }) =>
     $active ? theme.accent : theme.cardBackground};
-  color: ${({ $active, theme }) => ($active ? "#000000" : theme.text)};
+  color: ${({ $active, theme }) => ($active ? "#ffffff" : "#9fca95")};
   border: none;
   border-radius: 10px;
   padding: 0.85rem 1.25rem;
@@ -181,7 +181,7 @@ const SelectFilter = styled.select`
   border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.border};
   background-color: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: #129508;
   font-size: 0.9rem;
 `;
 
@@ -308,7 +308,7 @@ const QtyBtn = styled.button`
   border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: #16a34a;
   cursor: pointer;
   font-weight: 900;
 
@@ -328,7 +328,7 @@ const QtyInput = styled.input`
   border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: #16a34a;
   text-align: center;
   font-weight: 900;
   outline: none;

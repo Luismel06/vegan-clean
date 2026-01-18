@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const NavWrapper = styled.nav`
   width: 100%;
-  background-color: #418334;
+  background-color: #759161;
   color: ${({ theme }) => theme.text};
   display: flex;
   justify-content: space-between;

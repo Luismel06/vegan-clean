@@ -1,34 +1,31 @@
+// styles/GlobalStyles.js (o donde tengas tu tema)
 import { createGlobalStyle } from "styled-components";
 
 export const lightTheme = {
   mode: "light",
-  background: "#f5fbf7",
-  Hero: "#a3f3be",
-  text: "#094c8f",
-  cardBackground: "#a3f3be",
-  accent: "#0591e9",     // AZUL (principal)
-  accent2: "#00c27a",    // VERDE (secundario)
-  border: "rgba(0,0,0,0.15)",
+  background: "#ffffff",        // blanco total
+  surface: "#ffffff",           // tarjetas blancas
+  surface2: "#f6f8fb",          // gris muy suave para secciones si quieres
+  text: "#0b3a6f",              // AZUL para texto
+  heading: "#063a74",           // AZUL un poco más fuerte para títulos
+  accent: "#16a34a",            // VERDE (botones, líneas, resaltados)
+  accentSoft: "rgba(22,163,74,0.12)",
+  border: "rgba(2, 6, 23, 0.12)",
 };
 
 export const darkTheme = {
   mode: "dark",
-  background: "#0c0f14",
-  text: "#e4eaf0",
-  cardBackground: "#0f1620",
-  accent: "#73a6f3",     // AZUL (principal)
-  accent2: "#00c27a",    // VERDE (secundario)
-  border: "rgba(255,255,255,0.12)",
-};
-
-export const device = {
-  mobile: "(max-width: 600px)",
-  tablet: "(max-width: 900px)",
-  laptop: "(max-width: 1200px)",
+  background: "#0b1220",
+  surface: "#0f172a",
+  surface2: "#111c33",
+  text: "#e5eefb",
+  heading: "#ffffff",
+  accent: "#22c55e",
+  accentSoft: "rgba(34,197,94,0.16)",
+  border: "rgba(255,255,255,0.14)",
 };
 
 export const GlobalStyles = createGlobalStyle`
-  /* Reset y configuración base */
   * {
     margin: 0;
     padding: 0;
@@ -40,20 +37,18 @@ export const GlobalStyles = createGlobalStyle`
     width: 100%;
     height: 100%;
     overflow-x: hidden;
+    background: ${({ theme }) => theme.background};
   }
 
   body {
-    margin: 0;
-    padding: 0;
-    background-color: ${({ theme }) => theme.background};
     color: ${({ theme }) => theme.text};
     transition: background-color 0.25s, color 0.25s;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Manrope", sans-serif;
-    font-weight: 800;
+    font-weight: 900;
     letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.heading};
   }
 
   a {
@@ -66,10 +61,9 @@ export const GlobalStyles = createGlobalStyle`
     color: #ffffff;
   }
 
-  /* Variables de marca (para usar en cualquier componente) */
   :root {
-    --brand-blue: #0b5ed7;
-    --brand-green: #00c27a;
+    --brand-blue: #0b3a6f;
+    --brand-green: #16a34a;
   }
 
   /*  Animación reutilizable (por ejemplo, para loaders) */

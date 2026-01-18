@@ -69,6 +69,7 @@ const Select = styled.select`
 
 const Button = styled.button`
   background: ${({ theme }) => theme.accent};
+  color: ${({ theme }) => (theme.name === "light" ? "#000000" : "#ffffff")};
   border: none;
   border-radius: 10px;
   padding: 0.9rem 1.2rem;
@@ -81,7 +82,7 @@ const Button = styled.button`
   transition: 0.3s;
 
   &:hover {
-    background: #00a5bb;
+    background: #18a202;
     transform: scale(1.03);
   }
 `;
@@ -103,6 +104,7 @@ const Table = styled.table`
 
 const Th = styled.th`
   background: ${({ theme }) => theme.accent};
+  color: white;
   padding: 0.9rem;
   text-align: left;
   border-bottom: 3px solid ${({ theme }) => theme.background};

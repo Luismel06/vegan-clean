@@ -26,7 +26,7 @@ const InfoBlock = styled.div`
   max-width: 300px;
 
   h3 {
-    color: #5d9bf8;
+    color: ${({ theme }) => theme.accent};
     margin-bottom: 0.8rem;
   }
 
@@ -44,7 +44,7 @@ const SocialIcons = styled.div`
   margin-top: 1rem;
 
   a {
-    color: #5d9bf8;
+    color: ${({ theme }) => theme.text};
     transition: color 0.3s;
     &:hover {
       color: ${({ theme }) => theme.text};

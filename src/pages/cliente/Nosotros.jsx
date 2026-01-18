@@ -2,7 +2,6 @@ import styled from "styled-components";
 import { motion } from "framer-motion";
 
 const Container = styled.section`
-background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
   width: 100%;
   min-height: 100vh;
   background-color: ${({ theme }) => theme.background};
@@ -25,8 +24,8 @@ const Hero = styled(motion.div)`
   justify-content: center;
   background: ${({ theme }) =>
     theme.name === "light"
-      ? "rgba(22, 154, 10, 0.6)"
-      : "rgba(37, 169, 4, 0.5)"};
+      ? "rgba(77, 160, 44, 0.6)"
+      : "rgba(76, 191, 14, 0.6)"};
   backdrop-filter: blur(14px);
   border-radius: 20px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
@@ -262,7 +261,7 @@ export default function Nosotros() {
         whileInView={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
       >
-        <h2 style={{ color: "#00bcd4", marginBottom: "2rem", textAlign: "center" }}>
+        <h2 style={{ color: "#16a34a", marginBottom: "2rem", textAlign: "center" }}>
           Nuestra Historia
         </h2>
         <Timeline>

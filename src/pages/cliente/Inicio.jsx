@@ -10,11 +10,12 @@ import { Wrench, ShieldCheck, Clock, ArrowRight } from "lucide-react";
 const Wrapper = styled.div`
   width: 100%;
   min-height: 100vh;
-  padding-top: 4rem; /* ← FIX para que no se pegue al header */
+  padding-top: 4rem;
   color: ${({ theme }) => theme.text};
-  background: linear-gradient(180deg, #3a712dad, rgb(51 53 51 / 65%), #0136abb5);
-  font-family: "Inter", sans-serif;
+  background: ${({ theme }) => theme.background}; /* <-- blanco */
+  font-family: "Manrope", sans-serif;
 `;
+
 
 // ========== CONTENIDO ==========
 const Container = styled.div`
@@ -39,19 +40,20 @@ const Hero = styled.section`
 
 const Title = styled(motion.h1)`
   font-size: 2.7rem;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1.15;
-  color: ${({ theme }) => (theme.mode === "dark" ? "#0591e9" : "#feffff")};
+  color: ${({ theme }) => theme.heading};
 
   span {
     display: block;
-    color: ${({ theme }) => (theme.mode === "dark" ? "#ffffff" : "#0591e9")};
+    color: ${({ theme }) => theme.text};
   }
 
   @media (max-width: 768px) {
     font-size: 2.2rem;
   }
 `;
+
 
 const Subtitle = styled(motion.p)`
   margin-top: 1rem;
@@ -72,17 +74,11 @@ const Badge = styled.span`
   padding: 0.4rem 0.8rem;
   border-radius: 999px;
   font-size: 0.8rem;
-  background: ${({ theme }) =>
-    theme.mode === "dark"
-      ? "rgba(0, 160, 255, 0.16)"
-      : "rgba(0, 160, 255, 0.10)"};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === "dark"
-        ? "rgba(0, 200, 120, 0.35)"
-        : "rgba(0, 200, 120, 0.40)"};
-  color: ${({ theme }) => theme.accent};
+  background: ${({ theme }) => theme.accentSoft};
+  border: 1px solid ${({ theme }) => theme.accent};
+  color: ${({ theme }) => theme.text};
 `;
+
 
 const Actions = styled.div`
   display: flex;
@@ -92,22 +88,24 @@ const Actions = styled.div`
 `;
 
 const BtnPrimary = styled(Link)`
-  background: ${({ theme }) => theme.accent};
+  background: ${({ theme }) => theme.accent};       /* verde */
   padding: 0.85rem 1.7rem;
-  color: #000000;
+  color: #ffffff;
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   text-decoration: none;
-  box-shadow: 0 8px 22px rgba(0, 160, 255, 0.32);
+  box-shadow: 0 10px 25px rgba(22, 163, 74, 0.25);
   transition: 0.25s;
 
   &:hover {
     transform: translateY(-2px);
+    opacity: 0.95;
   }
 `;
+
 
 const KPIRow = styled.div`
   margin-top: 1.4rem;
@@ -176,7 +174,7 @@ const Features = styled.section`
 `;
 
 const FeatureCard = styled.div`
-  background: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.surface};
   padding: 1.3rem 1rem;
   border-radius: 16px;
   border: 1px solid ${({ theme }) => theme.border};
@@ -186,13 +184,12 @@ const FeatureCard = styled.div`
 `;
 
 const IconBox = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === "dark"
-      ? "rgba(0, 200, 120, 0.18)"
-      : "rgba(0, 200, 120, 0.12)"};
+  background: ${({ theme }) => theme.accentSoft};
   padding: 0.5rem;
   border-radius: 999px;
+  color: ${({ theme }) => theme.accent};
 `;
+
 
 // ========== SECCIONES ==========
 const ServicesSection = styled.section`
@@ -223,7 +220,7 @@ const ServicesGrid = styled.div`
 `;
 
 const ServiceCard = styled.div`
-  background: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.surface};
   padding: 1rem;
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
