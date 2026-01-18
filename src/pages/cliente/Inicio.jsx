@@ -342,7 +342,7 @@ export default function Inicio() {
 
             <Actions>
               {/* Ajusta la ruta si tu página de productos es otra */}
-              <BtnPrimary to="/productos">
+              <BtnPrimary to="/servicios">
                 Ver productos <ArrowRight size={16} />
               </BtnPrimary>
             </Actions>
