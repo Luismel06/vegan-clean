@@ -30,7 +30,6 @@ import VistaCotizacion from "../pages/admin/VistaCotizacion";
 // --- Páginas técnico ---
 import VendedorCatalogo from "../pages/vendedor/VendedorCatalogo";
 import VendedorHistorial from "../pages/vendedor/VendedorHistorial";
-import TicketVendedorDetalle from "../pages/vendedor/TicketVendedorDetalle";
 import DashboardVendedor from "../pages/vendedor/DashboardVendedor";
 
 // --- Login ---
@@ -117,7 +116,6 @@ const router = createBrowserRouter([
     children: [
       { path: "/vendedor/dashboard", element: <DashboardVendedor /> },
      { path: "/vendedor/catalogo", element: <VendedorCatalogo /> },
-    { path: "/vendedor/catalogo/:id", element: <TicketVendedorDetalle /> },
     { path: "/vendedor/historial", element: <VendedorHistorial /> },
     ],
   },
