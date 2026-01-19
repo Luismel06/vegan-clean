@@ -12,7 +12,7 @@ const Container = styled.section`
   width: 100%;
   min-height: 100vh;
   color: ${({ theme }) => theme.text};
-  padding: 6rem 1rem 5.5rem; /* espacio sticky bar */
+  padding: 6rem 1rem 5.5rem;
   text-align: center;
 `;
 
@@ -26,7 +26,7 @@ const CardShell = styled.div`
   margin: 0 auto;
 `;
 
-/* ---- Consulta de caso ---- */
+/* ---- Consulta de caso (AHORA = PREVENTA) ---- */
 const CaseCard = styled.div`
   max-width: 1000px;
   margin: 0 auto 2rem;
@@ -99,23 +99,23 @@ const CaseStatusTag = styled.span`
   font-size: 0.8rem;
   font-weight: 600;
   background: ${({ $estado }) =>
-    $estado === "Completado" || $estado === "Finalizado"
+    $estado === "cerrada"
       ? "rgba(46, 204, 113, 0.18)"
-      : $estado === "En progreso" || $estado === "En proceso"
+      : $estado === "cotizada"
       ? "rgba(26, 188, 156, 0.18)"
-      : $estado === "Requiere reprogramación"
-      ? "rgba(243, 156, 18, 0.18)"
-      : $estado === "Cliente no se encontraba" || $estado === "Cancelado"
+      : $estado === "en_revision" || $estado === "cotizando"
+      ? "rgba(241, 196, 15, 0.18)"
+      : $estado === "cancelada"
       ? "rgba(231, 76, 60, 0.18)"
       : "rgba(241, 196, 15, 0.18)"};
   color: ${({ $estado }) =>
-    $estado === "Completado" || $estado === "Finalizado"
+    $estado === "cerrada"
       ? "#27ae60"
-      : $estado === "En progreso" || $estado === "En proceso"
+      : $estado === "cotizada"
       ? "#16a085"
-      : $estado === "Requiere reprogramación"
-      ? "#e67e22"
-      : $estado === "Cliente no se encontraba" || $estado === "Cancelado"
+      : $estado === "en_revision" || $estado === "cotizando"
+      ? "#b7950b"
+      : $estado === "cancelada"
       ? "#c0392b"
       : "#b7950b"};
 `;
@@ -130,9 +130,8 @@ const Tabs = styled.div`
 `;
 
 const TabButton = styled.button`
-  background-color: ${({ $active, theme }) =>
-    $active ? theme.accent : theme.cardBackground};
-  color: ${({ $active, theme }) => ($active ? "#ffffff" : "#9fca95")};
+  background-color: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
+  color: ${({ $active }) => ($active ? "#ffffff" : "#9fca95")};
   border: none;
   border-radius: 10px;
   padding: 0.85rem 1.25rem;
@@ -200,7 +199,6 @@ const ImgWrap = styled.div`
   background: rgba(0, 0, 0, 0.08);
 `;
 
-/* Capa A: cover (default) */
 const ImgCover = styled.img`
   position: absolute;
   inset: 0;
@@ -213,7 +211,6 @@ const ImgCover = styled.img`
   transition: transform 320ms ease, opacity 220ms ease, filter 320ms ease;
 `;
 
-/* Capa B: contain (muestra completa) */
 const ImgContain = styled.img`
   position: absolute;
   inset: 0;
@@ -226,7 +223,6 @@ const ImgContain = styled.img`
   transition: transform 320ms ease, opacity 220ms ease;
 `;
 
-/* ---- Tarjeta ---- */
 const ProductCard = styled.div`
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
@@ -247,7 +243,6 @@ const ProductCard = styled.div`
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
   }
 
-  /* hover: cambia a "ver completa" */
   &:hover ${ImgCover} {
     opacity: 0;
     transform: scale(1.08);
@@ -287,7 +282,6 @@ const ProductTag = styled.span`
   margin-bottom: 0.25rem;
 `;
 
-/* ---- Cantidades ---- */
 const QtyRow = styled.div`
   margin-top: 0.8rem;
   display: flex;
@@ -348,7 +342,7 @@ const AddBtn = styled.button`
   }
 `;
 
-/* ---- Form cotización ---- */
+/* ---- Form preventa ---- */
 const FormPanel = styled(motion.form)`
   margin-top: 1.2rem;
   padding-top: 1rem;
@@ -406,7 +400,6 @@ const TipoClienteRow = styled.div`
   }
 `;
 
-/* ---- Sticky bar ---- */
 const StickyBar = styled.div`
   position: fixed;
   left: 0;
@@ -494,6 +487,62 @@ const getImageUrl = (bucket, imagen_url) => {
   return data?.publicUrl || "";
 };
 
+// Genera número de caso para preventas
+function generarNumeroCaso() {
+  const y = new Date().getFullYear();
+  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const ts = Date.now().toString().slice(-6);
+  return `PV-${y}-${ts}-${rand}`;
+}
+
+function labelEstado(estado) {
+  if (!estado) return "enviada";
+  return estado;
+}
+
+// --------- Normalización ----------
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+// --------- Cédula (11 dígitos, checksum) ----------
+function validarCedula(input) {
+  const ced = onlyDigits(input);
+  if (ced.length !== 11) return false;
+  if (/^0+$/.test(ced)) return false;
+
+  const pesos = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let suma = 0;
+
+  for (let i = 0; i < 10; i++) {
+    let prod = Number(ced[i]) * pesos[i];
+    if (prod >= 10) prod = Math.floor(prod / 10) + (prod % 10);
+    suma += prod;
+  }
+
+  const digito = Number(ced[10]);
+  const calc = (10 - (suma % 10)) % 10;
+  return digito === calc;
+}
+
+// --------- RNC (9 dígitos, checksum clásico) ----------
+function validarRNC(input) {
+  const rnc = onlyDigits(input);
+  if (rnc.length !== 9) return false;
+  if (/^0+$/.test(rnc)) return false;
+
+  const pesos = [7, 9, 8, 6, 5, 4, 3, 2];
+  let suma = 0;
+  for (let i = 0; i < 8; i++) suma += Number(rnc[i]) * pesos[i];
+
+  let resto = suma % 11;
+  let dig = 11 - resto;
+  if (dig === 10) dig = 2;
+  if (dig === 11) dig = 0;
+
+  return Number(rnc[8]) === dig;
+}
+
 // ===================== COMPONENTE =====================
 export default function Servicios() {
   const [tab, setTab] = useState("productos"); // productos | equipos
@@ -508,11 +557,16 @@ export default function Servicios() {
   const [categoriaFiltroEq, setCategoriaFiltroEq] = useState("");
   const [marcaFiltroEq, setMarcaFiltroEq] = useState("");
 
+  // Carrito persistente entre tabs
   const [carrito, setCarrito] = useState({});
 
   const [mostrarFormularioCot, setMostrarFormularioCot] = useState(false);
   const [tipoCliente, setTipoCliente] = useState("persona"); // persona | empresa
 
+  // Autocomplete
+  const [autoLoading, setAutoLoading] = useState(false);
+
+  // Consulta de preventa
   const [caseNumero, setCaseNumero] = useState("");
   const [caseResult, setCaseResult] = useState(null);
   const [caseLoading, setCaseLoading] = useState(false);
@@ -671,7 +725,7 @@ export default function Servicios() {
     });
   }, [currentData, categoriaFiltro, marcaFiltro]);
 
-  // ========= CONSULTA DE CASO =========
+  // ========= CONSULTA DE PREVENTA =========
   const handleBuscarCaso = async (e) => {
     e.preventDefault();
     const valor = caseNumero.trim();
@@ -679,7 +733,7 @@ export default function Servicios() {
       Swal.fire({
         icon: "info",
         title: "Ingresa tu número de caso",
-        text: "Ejemplo: CASE-123456",
+        text: "Ejemplo: PV-2026-123456-ABCDE",
         confirmButtonColor: "#0591e9",
       });
       return;
@@ -690,16 +744,16 @@ export default function Servicios() {
 
     try {
       let { data, error } = await supabase
-        .from("solicitudes")
-        .select("*, servicios(nombre)")
+        .from("preventas")
+        .select("id, numero_caso, cliente, estado, creado_en, email, telefono, direccion, tipo_cliente")
         .eq("numero_caso", valor)
         .maybeSingle();
 
       if ((!data || error) && /^[0-9]+$/.test(valor)) {
         const idNum = Number(valor);
         const resp = await supabase
-          .from("solicitudes")
-          .select("*, servicios(nombre)")
+          .from("preventas")
+          .select("id, numero_caso, cliente, estado, creado_en, email, telefono, direccion, tipo_cliente")
           .eq("id", idNum)
           .maybeSingle();
         data = resp.data;
@@ -708,16 +762,15 @@ export default function Servicios() {
       if (!data) {
         setCaseResult({ notFound: true });
       } else {
-        const estadoFinal = data.estado_solicitud || data.estado || "Agendado";
         setCaseResult({
-          numero_caso: data.numero_caso || `CASE-${data.id}`,
+          id: data.id,
+          numero_caso: data.numero_caso || `PV-${data.id}`,
           cliente: data.cliente,
-          servicio_nombre: data.servicios?.nombre || "No especificado",
-          estado: estadoFinal,
-          fecha_creacion: data.fecha ? new Date(data.fecha).toLocaleString() : "-",
-          fecha_agendada: data.fecha_agendada ? new Date(data.fecha_agendada).toLocaleDateString() : "-",
-          hora_agendada: data.hora_agendada || "-",
-          vendedor: data.vendedor_asignado || "Pendiente de asignar",
+          estado: labelEstado(data.estado),
+          creado_en: data.creado_en ? new Date(data.creado_en).toLocaleString() : "-",
+          tipo_cliente: data.tipo_cliente || "-",
+          email: data.email || "-",
+          telefono: data.telefono || "-",
           direccion: data.direccion || "-",
         });
       }
@@ -725,7 +778,7 @@ export default function Servicios() {
       console.error(err);
       Swal.fire({
         icon: "error",
-        title: "Error al consultar el caso",
+        title: "Error al consultar",
         text: "Intenta nuevamente en unos minutos.",
         confirmButtonColor: "#0591e9",
       });
@@ -734,7 +787,7 @@ export default function Servicios() {
     }
   };
 
-  // ========= COTIZACIÓN =========
+  // ========= TEXTO ITEMS =========
   const itemsTexto = useMemo(() => {
     if (!carritoItems.length) return "";
     return carritoItems
@@ -745,6 +798,132 @@ export default function Servicios() {
       .join("\n");
   }, [carritoItems]);
 
+  // ========= AUTOCOMPLETAR CLIENTE =========
+  async function autocompletarPorDocumento(formEl) {
+    if (!formEl) return;
+
+    const emailEl = formEl.elements.email;
+    const telEl = formEl.elements.telefono;
+    const dirEl = formEl.elements.direccion;
+    const clienteEl = formEl.elements.cliente;
+    const empresaNombreEl = formEl.elements.empresa_nombre;
+
+    try {
+      setAutoLoading(true);
+
+      if (tipoCliente === "persona") {
+        const ced = onlyDigits(formEl.elements.cedula?.value || "");
+        if (!validarCedula(ced)) return;
+
+        const { data, error } = await supabase
+          .from("clientes")
+          .select("id, nombre, email, telefono, direccion, cedula")
+          .eq("cedula", ced)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return;
+
+        if (clienteEl) clienteEl.value = data.nombre || clienteEl.value;
+        if (emailEl) emailEl.value = data.email || emailEl.value;
+        if (telEl) telEl.value = data.telefono || telEl.value;
+        if (dirEl) dirEl.value = data.direccion || dirEl.value;
+        return;
+      }
+
+      // Empresa
+      const rnc = onlyDigits(formEl.elements.empresa_rnc?.value || "");
+      if (!validarRNC(rnc)) return;
+
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("id, nombre, email, telefono, direccion, empresa_rnc")
+        .eq("empresa_rnc", rnc)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return;
+
+      if (empresaNombreEl) empresaNombreEl.value = data.nombre || empresaNombreEl.value;
+      if (emailEl) emailEl.value = data.email || emailEl.value;
+      if (telEl) telEl.value = data.telefono || telEl.value;
+      if (dirEl) dirEl.value = data.direccion || dirEl.value;
+    } catch (err) {
+      console.error("❌ Autocomplete error:", err);
+    } finally {
+      setAutoLoading(false);
+    }
+  }
+
+  // ========= UPSERT CLIENTE =========
+  async function upsertClienteDesdeFormulario({
+    tipoClienteLocal,
+    cliente,
+    email,
+    telefono,
+    direccion,
+    cedula,
+    empresa_nombre,
+    empresa_rnc,
+  }) {
+    const base = {
+      tipo_cliente: tipoClienteLocal,
+      nombre: tipoClienteLocal === "empresa" ? (empresa_nombre || "").trim() : (cliente || "").trim(),
+      telefono: (telefono || "").trim() || null,
+      email: (email || "").trim() || null,
+      direccion: (direccion || "").trim() || null,
+      es_recurrente: true,
+    };
+
+    if (tipoClienteLocal === "persona") {
+      const ced = onlyDigits(cedula);
+      if (!validarCedula(ced)) {
+        Swal.fire("Cédula inválida", "Verifica tu cédula antes de continuar.", "warning");
+        return null;
+      }
+
+      // IMPORTANTE: NO MANDAR empresa_rnc aquí
+      const payload = { ...base, cedula: ced };
+
+      const { data, error } = await supabase
+        .from("clientes")
+        .upsert(payload, { onConflict: "cedula" })
+        .select("id")
+        .single();
+
+      if (error) {
+        console.error("❌ upsert cliente (persona):", error);
+        Swal.fire("Error", "No se pudo registrar el cliente.", "error");
+        return null;
+      }
+      return data?.id ?? null;
+    }
+
+    // Empresa
+    const rnc = onlyDigits(empresa_rnc);
+    if (!validarRNC(rnc)) {
+      Swal.fire("RNC inválido", "Verifica el RNC antes de continuar.", "warning");
+      return null;
+    }
+
+    // IMPORTANTE: NO MANDAR cedula aquí
+    const payload = { ...base, empresa_rnc: rnc };
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .upsert(payload, { onConflict: "empresa_rnc" })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("❌ upsert cliente (empresa):", error);
+      Swal.fire("Error", "No se pudo registrar el cliente.", "error");
+      return null;
+    }
+    return data?.id ?? null;
+  }
+
+  // ========= SUBMIT =========
   const handleSubmitCotizacion = async (e) => {
     e.preventDefault();
 
@@ -758,22 +937,38 @@ export default function Servicios() {
       return;
     }
 
+    // Por si no salió del campo documento
+    await autocompletarPorDocumento(e.target);
+
     const cliente = e.target.cliente.value.trim();
     const email = e.target.email.value.trim();
     const telefono = e.target.telefono.value.trim();
     const direccion = e.target.direccion.value.trim();
     const nota = e.target.nota.value.trim();
 
-    const cedula = tipoCliente === "persona" ? (e.target.cedula?.value || "").trim() : null;
-    const empresa_nombre = tipoCliente === "empresa" ? (e.target.empresa_nombre?.value || "").trim() : null;
-    const empresa_rnc = tipoCliente === "empresa" ? (e.target.empresa_rnc?.value || "").trim() : null;
+    const cedulaRaw = tipoCliente === "persona" ? (e.target.cedula?.value || "").trim() : null;
+    const empresa_nombreRaw = tipoCliente === "empresa" ? (e.target.empresa_nombre?.value || "").trim() : null;
+    const empresa_rncRaw = tipoCliente === "empresa" ? (e.target.empresa_rnc?.value || "").trim() : null;
+
+    const cedula = tipoCliente === "persona" ? onlyDigits(cedulaRaw) : null;
+    const empresa_rnc = tipoCliente === "empresa" ? onlyDigits(empresa_rncRaw) : null;
+
+    if (tipoCliente === "persona" && !validarCedula(cedula)) {
+      Swal.fire({ icon: "warning", title: "Cédula inválida", text: "Verifica que la cédula sea válida.", confirmButtonColor: "#0591e9" });
+      return;
+    }
+
+    if (tipoCliente === "empresa" && !validarRNC(empresa_rnc)) {
+      Swal.fire({ icon: "warning", title: "RNC inválido", text: "Verifica que el RNC sea válido.", confirmButtonColor: "#0591e9" });
+      return;
+    }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Swal.fire({
         icon: "warning",
         title: "Correo electrónico no válido",
-        text: "Por favor, introduce un correo electrónico válido (ejemplo@dominio.com).",
+        text: "Por favor, introduce un correo válido.",
         confirmButtonColor: "#0591e9",
       });
       return;
@@ -783,36 +978,119 @@ export default function Servicios() {
       Swal.fire({
         icon: "warning",
         title: "Dirección requerida",
-        text: "Por favor, indica tu dirección para fines de entrega/instalación.",
+        text: "Por favor, indica tu dirección.",
         confirmButtonColor: "#0591e9",
       });
       return;
     }
 
+    // 0) Upsert cliente (crea cuenta indirecta)
+    const clienteId = await upsertClienteDesdeFormulario({
+      tipoClienteLocal: tipoCliente,
+      cliente,
+      email,
+      telefono,
+      direccion,
+      cedula,
+      empresa_nombre: empresa_nombreRaw,
+      empresa_rnc,
+    });
+
+    if (!clienteId) return;
+
+    // 1) Crear preventa
+    const numero_caso = generarNumeroCaso();
+
     try {
-      await emailjs.send(
-        "service_kfvhwxq",
-        "template_iy48pw3",
-        {
-          tipo_cliente: tipoCliente,
-          cliente,
-          email,
-          telefono,
-          direccion,
-          cedula: cedula || "",
-          empresa_nombre: empresa_nombre || "",
-          empresa_rnc: empresa_rnc || "",
-          items: itemsTexto,
-          nota: nota || "",
-        },
-        "yoOeYAk8XPOIvEhbf"
-      );
+      const { data: p, error: errPreventa } = await supabase
+        .from("preventas")
+        .insert([
+          {
+            numero_caso,
+            tipo_cliente: tipoCliente,
+            cliente,
+            cedula: tipoCliente === "persona" ? cedula : null,
+            empresa_nombre: tipoCliente === "empresa" ? empresa_nombreRaw : null,
+            empresa_rnc: tipoCliente === "empresa" ? empresa_rnc : null,
+            telefono,
+            email,
+            direccion,
+            nota_cliente: nota || null,
+            estado: "enviada",
+            // Si luego agregas cliente_id en preventas:
+            // cliente_id: clienteId,
+          },
+        ])
+        .select()
+        .single();
+
+      if (errPreventa || !p) {
+        console.error("❌ Error creando preventa:", errPreventa);
+        Swal.fire({
+          icon: "error",
+          title: "No se pudo enviar tu solicitud",
+          text: errPreventa?.message || "Intenta nuevamente más tarde.",
+          confirmButtonColor: "#0591e9",
+        });
+        return;
+      }
+
+      // 2) Insertar detalle_preventa
+      const detalleRows = carritoItems.map((it) => ({
+        preventa_id: p.id,
+        producto_id: it.tipo === "producto" ? it.id : null,
+        equipo_id: it.tipo === "equipo" ? it.id : null,
+        cantidad: Number(it.qty || 1),
+      }));
+
+      const { error: errDet } = await supabase.from("detalle_preventa").insert(detalleRows);
+      if (errDet) {
+        console.error("❌ Error creando detalle_preventa:", errDet);
+        Swal.fire({
+          icon: "error",
+          title: "Preventa creada, pero faltó el detalle",
+          text: "Contacta al administrador. (detalle_preventa falló)",
+          confirmButtonColor: "#0591e9",
+        });
+        return;
+      }
+
+      // 3) Email opcional
+      try {
+        await emailjs.send(
+          "service_kfvhwxq",
+          "template_iy48pw3",
+          {
+            tipo_cliente: tipoCliente,
+            cliente,
+            email,
+            telefono,
+            direccion,
+            cedula: cedula || "",
+            empresa_nombre: empresa_nombreRaw || "",
+            empresa_rnc: empresa_rnc || "",
+            items: itemsTexto,
+            nota: nota || "",
+            numero_caso,
+            preventa_id: String(p.id),
+          },
+          "yoOeYAk8XPOIvEhbf"
+        );
+      } catch (mailErr) {
+        console.warn("⚠️ Preventa creada, pero email falló:", mailErr);
+      }
+
+      try {
+        localStorage.setItem("ultima_preventa_numero_caso", numero_caso);
+      } catch {}
 
       Swal.fire({
         icon: "success",
-        title: "Solicitud de cotización enviada",
+        title: "Solicitud enviada",
         html: `
           <p>Recibimos tu solicitud.</p>
+          <p><strong>Número de caso:</strong> <span style="font-size:1.05rem">${numero_caso}</span></p>
+          <p><strong>ID:</strong> ${p.id}</p>
           <p style="margin-top:8px;"><strong>Items:</strong></p>
           <pre style="text-align:left; white-space:pre-wrap; margin:0; padding:10px; background:#f3f6ff; border-radius:10px;">${itemsTexto}</pre>
         `,
@@ -822,8 +1100,9 @@ export default function Servicios() {
       e.target.reset();
       setMostrarFormularioCot(false);
       setTipoCliente("persona");
+      setCarrito({});
     } catch (error) {
-      console.error("❌ Error enviando cotización:", error);
+      console.error("❌ Error general:", error);
       Swal.fire({
         icon: "error",
         title: "Error al enviar",
@@ -835,35 +1114,47 @@ export default function Servicios() {
 
   const tipoActual = tab === "productos" ? "producto" : "equipo";
 
+  useEffect(() => {
+    try {
+      const last = localStorage.getItem("ultima_preventa_numero_caso");
+      if (last && !caseNumero) setCaseNumero(last);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Container>
-      {/* Consulta de caso */}
+      <Title>Catálogo / Solicitud de Cotización</Title>
+
+      {/* Consulta de PREVENTA */}
       <CaseCard>
-        <CaseTitle>Consulta el estado de tu caso</CaseTitle>
+        <CaseTitle>Consulta el estado de tu solicitud</CaseTitle>
         <p style={{ fontSize: "0.85rem", opacity: 0.8, margin: 0 }}>
-          Ingresa el número de caso que recibiste por correo (ej:{" "}
-          <strong>CASE-123456</strong>) para ver su estado actual.
+          Ingresa tu <strong>número de caso</strong> (ej: <strong>PV-2026-123456-ABCDE</strong>) o tu{" "}
+          <strong>ID</strong> para ver el estado.
         </p>
 
         <CaseForm onSubmit={handleBuscarCaso}>
           <CaseInput
-            placeholder="Ej: CASE-123456"
+            placeholder="Ej: PV-2026-123456-ABCDE o 15"
             value={caseNumero}
             onChange={(e) => setCaseNumero(e.target.value)}
           />
-          <CaseButton type="submit">
-            {caseLoading ? "Buscando..." : "Ver estado"}
-          </CaseButton>
+          <CaseButton type="submit">{caseLoading ? "Buscando..." : "Ver estado"}</CaseButton>
         </CaseForm>
 
         {caseResult && (
           <CaseResultBox>
             {caseResult.notFound ? (
               <div style={{ fontSize: "0.9rem" }}>
-                No encontramos un caso con ese número. Verifica que lo hayas escrito correctamente.
+                No encontramos una solicitud con ese número. Verifica que lo hayas escrito correctamente.
               </div>
             ) : (
               <>
+                <CaseRow>
+                  <span>ID:</span>
+                  <span>{caseResult.id}</span>
+                </CaseRow>
                 <CaseRow>
                   <span>Número de caso:</span>
                   <span>{caseResult.numero_caso}</span>
@@ -873,10 +1164,6 @@ export default function Servicios() {
                   <span>{caseResult.cliente}</span>
                 </CaseRow>
                 <CaseRow>
-                  <span>Servicio:</span>
-                  <span>{caseResult.servicio_nombre}</span>
-                </CaseRow>
-                <CaseRow>
                   <span>Estado:</span>
                   <span>
                     <CaseStatusTag $estado={caseResult.estado}>● {caseResult.estado}</CaseStatusTag>
@@ -884,19 +1171,13 @@ export default function Servicios() {
                 </CaseRow>
                 <CaseRow>
                   <span>Creado:</span>
-                  <span>{caseResult.fecha_creacion}</span>
+                  <span>{caseResult.creado_en}</span>
                 </CaseRow>
                 <CaseRow>
-                  <span>Fecha agendada:</span>
-                  <span>{caseResult.fecha_agendada}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Hora agendada:</span>
-                  <span>{caseResult.hora_agendada}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Técnico asignado:</span>
-                  <span>{caseResult.vendedor}</span>
+                  <span>Contacto:</span>
+                  <span>
+                    {caseResult.email} / {caseResult.telefono}
+                  </span>
                 </CaseRow>
                 <CaseRow>
                   <span>Dirección:</span>
@@ -909,7 +1190,6 @@ export default function Servicios() {
       </CaseCard>
 
       <CardShell>
-        {/* Tabs */}
         <Tabs>
           <TabButton $active={tab === "productos"} onClick={() => setTab("productos")}>
             Productos
@@ -927,7 +1207,6 @@ export default function Servicios() {
             </p>
           </SectionHead>
 
-          {/* Filtros */}
           <FiltersRow>
             <SelectFilter value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
               <option value="">Todas las categorías</option>
@@ -948,7 +1227,6 @@ export default function Servicios() {
             </SelectFilter>
           </FiltersRow>
 
-          {/* Grid */}
           {loadingCurrent ? (
             <p>Cargando {tab}...</p>
           ) : filtrados.length === 0 ? (
@@ -958,7 +1236,6 @@ export default function Servicios() {
               {filtrados.map((p) => {
                 const key = makeKey(tipoActual, p.id);
                 const qty = carrito[key]?.qty || 0;
-
                 const imgSrc = p._img || "/placeholder-product.png";
 
                 return (
@@ -1030,7 +1307,7 @@ export default function Servicios() {
             </ProductGrid>
           )}
 
-          {/* Form cotización */}
+          {/* Form preventa */}
           <AnimatePresence>
             {mostrarFormularioCot && (
               <FormPanel
@@ -1073,14 +1350,25 @@ export default function Servicios() {
                   </label>
                 </TipoClienteRow>
 
+                {/* Documento primero para autocompletar */}
                 {tipoCliente === "persona" && (
-                  <Input name="cedula" placeholder="Cédula (ej: 001-1234567-8)" required />
+                  <Input
+                    name="cedula"
+                    placeholder="Cédula (ej: 001-1234567-8)"
+                    required
+                    onBlur={(e) => autocompletarPorDocumento(e.currentTarget.form)}
+                  />
                 )}
 
                 {tipoCliente === "empresa" && (
                   <>
+                    <Input
+                      name="empresa_rnc"
+                      placeholder="RNC / Identificación fiscal (9 dígitos)"
+                      required
+                      onBlur={(e) => autocompletarPorDocumento(e.currentTarget.form)}
+                    />
                     <Input name="empresa_nombre" placeholder="Nombre o razón social de la empresa" required />
-                    <Input name="empresa_rnc" placeholder="RNC / Identificación fiscal" required />
                   </>
                 )}
 
@@ -1089,16 +1377,19 @@ export default function Servicios() {
                 <Input name="telefono" placeholder="Tu número de teléfono" required />
                 <Input name="direccion" placeholder="Dirección" required />
 
+                {autoLoading && (
+                  <div style={{ fontSize: "0.85rem", opacity: 0.75 }}>Autocompletando datos del cliente...</div>
+                )}
+
                 <TextArea name="nota" rows="3" placeholder="Notas (opcional): entrega, detalles, etc." />
 
-                <Button type="submit">Enviar solicitud de cotización</Button>
+                <Button type="submit">Enviar solicitud</Button>
               </FormPanel>
             )}
           </AnimatePresence>
         </Content>
       </CardShell>
 
-      {/* Sticky bar */}
       <StickyBar>
         <StickyInner>
           <SelectedCount>

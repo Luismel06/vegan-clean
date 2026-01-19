@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+// src/pages/admin/Cotizaciones.jsx
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
 import { Eye, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 const Wrapper = styled.div`
   padding: 2rem;
@@ -24,7 +25,7 @@ const Input = styled.input`
   border: 1px solid ${({ theme }) => theme.border};
   border-radius: 6px;
   background: ${({ theme }) => theme.inputBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent2};
 `;
 
 const Select = styled.select`
@@ -34,7 +35,7 @@ const Select = styled.select`
   border: 1px solid ${({ theme }) => theme.border};
   border-radius: 6px;
   background: ${({ theme }) => theme.inputBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent2};
 `;
 
 const Button = styled.button`
@@ -50,6 +51,12 @@ const Button = styled.button`
   &:hover {
     opacity: 0.9;
     transform: scale(1.03);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
   }
 `;
 
@@ -112,202 +119,493 @@ const EstadoBadge = styled.span`
       : "#b7950b"};
 `;
 
+// ===================== HELPERS =====================
 function formatearEstado(estado) {
   if (!estado) return "Pendiente";
   return estado.charAt(0).toUpperCase() + estado.slice(1);
 }
 
+function safeNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function onlyDigits(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+function labelCliente(cli) {
+  if (!cli) return "-";
+  if (cli.tipo_cliente === "empresa") {
+    return `${cli.nombre || "-"} (RNC: ${cli.empresa_rnc || "-"})`;
+  }
+  return `${cli.nombre || "-"} (Cédula: ${cli.cedula || "-"})`;
+}
+
+async function buscarClientePorDocumento({ tipo, documento }) {
+  const doc = onlyDigits(documento);
+
+  if (!doc) return null;
+
+  if (tipo === "persona") {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select(
+        "id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar"
+      )
+      .eq("cedula", doc)
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .select(
+      "id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar"
+    )
+    .eq("empresa_rnc", doc)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 export default function Cotizaciones() {
+  const [searchParams] = useSearchParams();
+
+  // URL: /admin/cotizaciones?preventa=1
+  const preventaIdFromUrl = searchParams.get("preventa");
+
+  // snapshot (opcional)
   const [cliente, setCliente] = useState("");
   const [descuento, setDescuento] = useState(0);
-  const [servicio, setServicio] = useState("");
-  const [servicios, setServicios] = useState([]);
 
+  // Catálogos
   const [productos, setProductos] = useState([]);
-  const [productoSeleccionado, setProductoSeleccionado] = useState("");
+  const [equipos, setEquipos] = useState([]);
+
+  // Buscar cliente por documento
+  const [tipoCliente, setTipoCliente] = useState("persona"); // persona | empresa
+  const [doc, setDoc] = useState(""); // cedula o rnc
+  const [clienteSel, setClienteSel] = useState(null);
+  const [clienteLoading, setClienteLoading] = useState(false);
+
+  // Selector tipo + item
+  const [tipoItem, setTipoItem] = useState("producto"); // "producto" | "equipo"
+  const [itemSeleccionado, setItemSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState(1);
+
+  // Extra solo admin
+  const [extraUnitario, setExtraUnitario] = useState(0);
+
+  // Detalle
   const [detalle, setDetalle] = useState([]);
 
+  // Historial
   const [cotizaciones, setCotizaciones] = useState([]);
-  const [nombreServicio, setNombreServicio] = useState("");
-  const [precioServicio, setPrecioServicio] = useState(0);
+
+  // Plan 50/50
   const [usaAnticipo, setUsaAnticipo] = useState(false);
-  const [ajustePrecio, setAjustePrecio] = useState(0);
 
-  // 🔹 Solicitudes (tickets)
-  const [solicitudes, setSolicitudes] = useState([]);
-  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState("");
+  // Preventas
+  const [preventas, setPreventas] = useState([]);
+  const [preventaSeleccionada, setPreventaSeleccionada] = useState("");
 
-  // Para filtros de productos (categoría / marca)
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
-  const [marcaSeleccionada, setMarcaSeleccionada] = useState("");
+  // Preventa cargada (para preload)
+  const [preventaCargada, setPreventaCargada] = useState(null);
+  const [loadingPreventa, setLoadingPreventa] = useState(false);
+
+  // Filtros
+  const [categoriaProducto, setCategoriaProducto] = useState("");
+  const [marcaProducto, setMarcaProducto] = useState("");
+  const [categoriaEquipo, setCategoriaEquipo] = useState("");
+  const [marcaEquipo, setMarcaEquipo] = useState("");
 
   const navigate = useNavigate();
 
+  // ========= Bloqueo precios en vendedor =========
+  const role = localStorage.getItem("rol") || ""; // "admin" | "vendedor"
+  const isVendedor = role === "vendedor";
+  const allowPriceEdit = !isVendedor;
+
   useEffect(() => {
-    fetchServicios();
-    fetchProductos();
+    fetchCatalogos();
     fetchCotizaciones();
-    fetchSolicitudes();
+    fetchPreventas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchServicios() {
-    const { data, error } = await supabase.from("servicios").select("*");
-    if (!error) setServicios(data || []);
-  }
+  // Preload si viene por URL
+  useEffect(() => {
+    if (!preventaIdFromUrl) return;
+    setPreventaSeleccionada(String(preventaIdFromUrl));
+    preloadDesdePreventa(Number(preventaIdFromUrl));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preventaIdFromUrl]);
 
-  async function fetchProductos() {
-    const { data, error } = await supabase.from("productos").select("*");
-    if (!error) setProductos(data || []);
+  async function fetchCatalogos() {
+    const [{ data: prods, error: errP }, { data: eqs, error: errE }] = await Promise.all([
+      supabase.from("productos").select("*").order("id", { ascending: false }),
+      supabase.from("equipos").select("*").order("id", { ascending: false }),
+    ]);
+
+    if (errP) console.error(errP);
+    if (errE) console.error(errE);
+
+    setProductos(prods || []);
+    setEquipos(eqs || []);
   }
 
   async function fetchCotizaciones() {
+    // Traer join con clientes para mostrar en historial
     const { data, error } = await supabase
       .from("cotizaciones")
-      .select("*")
-      .order("id", { ascending: false });
-    if (!error) setCotizaciones(data || []);
-  }
-
-  async function fetchSolicitudes() {
-    const { data, error } = await supabase
-      .from("solicitudes")
-      .select("id, cliente, servicio_id, estado, fecha, numero_caso");
-    if (!error) setSolicitudes(data || []);
-  }
-
-  // ========= CATEGORÍAS / MARCAS PARA PRODUCTOS =========
-  const categorias = Array.from(
-    new Set((productos || []).map((p) => p.categoria || "Otros"))
-  );
-
-  const marcasFiltradas = Array.from(
-    new Set(
-      (productos || [])
-        .filter((p) =>
-          categoriaSeleccionada
-            ? (p.categoria || "Otros") === categoriaSeleccionada
-            : true
+      .select(
+        `
+        *,
+        cliente_ref:clientes (
+          id, tipo_cliente, nombre, cedula, empresa_rnc
         )
-        .map((p) => p.marca || p.proveedor || "Sin marca")
-    )
+      `
+      )
+      .order("id", { ascending: false });
+
+    if (error) console.error(error);
+    setCotizaciones(data || []);
+  }
+
+  async function fetchPreventas() {
+    // Traer cliente_id para poder auto-vincular
+    const { data, error } = await supabase
+      .from("preventas")
+      .select("id, numero_caso, cliente, estado, creado_en, tipo_cliente, email, telefono, cedula, empresa_rnc, cliente_id")
+      .order("id", { ascending: false });
+
+    if (error) console.error(error);
+    setPreventas(data || []);
+  }
+
+  async function handleBuscarCliente() {
+    try {
+      setClienteLoading(true);
+      const cli = await buscarClientePorDocumento({ tipo: tipoCliente, documento: doc });
+      if (!cli) {
+        setClienteSel(null);
+        Swal.fire(
+          "No encontrado",
+          "No existe un cliente con ese documento. Debe registrarse primero desde /cliente/servicio.",
+          "info"
+        );
+        return;
+      }
+      setClienteSel(cli);
+      setCliente(cli.nombre || "");
+      // si el cliente encontrado es empresa/persona, sincroniza el tipo
+      setTipoCliente(cli.tipo_cliente || tipoCliente);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo buscar el cliente.", "error");
+    } finally {
+      setClienteLoading(false);
+    }
+  }
+
+  // ===================== PRELOAD DESDE PREVENTA =====================
+  async function preloadDesdePreventa(preventaId) {
+    if (!preventaId || Number.isNaN(preventaId)) return;
+
+    setLoadingPreventa(true);
+
+    try {
+      // 1) Cabecera preventa (incluye cliente_id)
+      const { data: p, error: errPrev } = await supabase
+        .from("preventas")
+        .select("*")
+        .eq("id", preventaId)
+        .single();
+
+      if (errPrev) throw errPrev;
+      if (!p) throw new Error("Preventa no encontrada");
+
+      setPreventaCargada(p);
+
+      // snapshot texto (fallback)
+      if (!cliente) setCliente(p.cliente || "");
+
+      // 1.1) Intentar cargar clienteSel desde cliente_id o documento
+      try {
+        // a) por cliente_id
+        if (p.cliente_id) {
+          const { data: cli, error: errCli } = await supabase
+            .from("clientes")
+            .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar")
+            .eq("id", p.cliente_id)
+            .maybeSingle();
+
+          if (errCli) throw errCli;
+          if (cli) {
+            setClienteSel(cli);
+            setTipoCliente(cli.tipo_cliente || p.tipo_cliente || "persona");
+            setDoc(cli.tipo_cliente === "empresa" ? (cli.empresa_rnc || "") : (cli.cedula || ""));
+            setCliente(cli.nombre || p.cliente || "");
+          }
+        } else {
+          // b) por documento en preventa (si no hay cliente_id)
+          if (p.tipo_cliente === "empresa" && p.empresa_rnc) {
+            setTipoCliente("empresa");
+            setDoc(p.empresa_rnc);
+            const cli = await buscarClientePorDocumento({ tipo: "empresa", documento: p.empresa_rnc });
+            if (cli) {
+              setClienteSel(cli);
+              setCliente(cli.nombre || p.cliente || "");
+            }
+          } else if (p.tipo_cliente === "persona" && p.cedula) {
+            setTipoCliente("persona");
+            setDoc(p.cedula);
+            const cli = await buscarClientePorDocumento({ tipo: "persona", documento: p.cedula });
+            if (cli) {
+              setClienteSel(cli);
+              setCliente(cli.nombre || p.cliente || "");
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ No se pudo auto-vincular cliente desde preventa:", e);
+      }
+
+      // 2) Detalle preventa
+      const { data: detPrev, error: errDet } = await supabase
+        .from("detalle_preventa")
+        .select("id, preventa_id, producto_id, equipo_id, cantidad")
+        .eq("preventa_id", preventaId);
+
+      if (errDet) throw errDet;
+
+      const rows = detPrev || [];
+
+      if (!rows.length) {
+        setDetalle([]);
+        if (p.estado === "enviada") {
+          await supabase.from("preventas").update({ estado: "en_revision" }).eq("id", preventaId);
+          fetchPreventas();
+        }
+        return;
+      }
+
+      // 3) Cargar datos de productos/equipos usados
+      const productoIds = Array.from(new Set(rows.filter((r) => r.producto_id != null).map((r) => r.producto_id)));
+      const equipoIds = Array.from(new Set(rows.filter((r) => r.equipo_id != null).map((r) => r.equipo_id)));
+
+      const [{ data: prodsData, error: errProds }, { data: eqsData, error: errEqs }] = await Promise.all([
+        productoIds.length
+          ? supabase.from("productos").select("id, nombre, precio, modelo, marca, categoria, cantidad").in("id", productoIds)
+          : Promise.resolve({ data: [], error: null }),
+        equipoIds.length
+          ? supabase.from("equipos").select("id, nombre, precio, modelo, marca, categoria, cantidad").in("id", equipoIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (errProds) throw errProds;
+      if (errEqs) throw errEqs;
+
+      const prodMap = new Map((prodsData || []).map((x) => [x.id, x]));
+      const eqMap = new Map((eqsData || []).map((x) => [x.id, x]));
+
+      // 4) Mapear a pre-cotización
+      const precargado = rows.map((r) => {
+        const isProd = r.producto_id != null;
+        const item = isProd ? prodMap.get(r.producto_id) : eqMap.get(r.equipo_id);
+
+        const cant = safeNumber(r.cantidad, 1);
+        const precioBase = safeNumber(item?.precio, 0);
+        const extra = allowPriceEdit ? 0 : 0;
+        const precioUnitario = precioBase + extra;
+
+        return {
+          tipo: isProd ? "producto" : "equipo",
+          item_id: isProd ? Number(r.producto_id) : Number(r.equipo_id),
+          nombre: item?.nombre || "(Sin nombre)",
+          modelo: item?.modelo || "",
+          cantidad: cant,
+          precioBase,
+          extra,
+          precioUnitario,
+          _preventa_detalle_id: r.id,
+        };
+      });
+
+      setDetalle(precargado);
+
+      if (p.estado === "enviada") {
+        await supabase.from("preventas").update({ estado: "en_revision" }).eq("id", preventaId);
+        fetchPreventas();
+      }
+    } catch (e) {
+      console.error("❌ preloadDesdePreventa:", e);
+      Swal.fire("Error", "No se pudo precargar la preventa en la cotización.", "error");
+    } finally {
+      setLoadingPreventa(false);
+    }
+  }
+
+  // ===================== filtros catálogo =====================
+  const categoriasProductos = useMemo(
+    () => Array.from(new Set((productos || []).map((p) => p.categoria || "Otros"))),
+    [productos]
   );
 
-  const productosFiltrados = (productos || []).filter((p) => {
-    const cat = p.categoria || "Otros";
-    const marca = p.marca || p.proveedor || "Sin marca";
-
-    if (categoriaSeleccionada && cat !== categoriaSeleccionada) return false;
-    if (marcaSeleccionada && marca !== marcaSeleccionada) return false;
-    return true;
-  });
-
-  // ========= AGREGAR PRODUCTO A DETALLE =========
-  function agregarProducto() {
-    if (!productoSeleccionado) return;
-
-    const prod = productos.find(
-      (p) => p.id === parseInt(productoSeleccionado)
+  const marcasProductosFiltradas = useMemo(() => {
+    return Array.from(
+      new Set(
+        (productos || [])
+          .filter((p) => (categoriaProducto ? (p.categoria || "Otros") === categoriaProducto : true))
+          .map((p) => p.marca || p.proveedor || "Sin marca")
+      )
     );
-    if (!prod) return;
+  }, [productos, categoriaProducto]);
 
-    const cant = Number(cantidad);
+  const productosFiltrados = useMemo(() => {
+    return (productos || []).filter((p) => {
+      const cat = p.categoria || "Otros";
+      const marca = p.marca || p.proveedor || "Sin marca";
+      if (categoriaProducto && cat !== categoriaProducto) return false;
+      if (marcaProducto && marca !== marcaProducto) return false;
+      return true;
+    });
+  }, [productos, categoriaProducto, marcaProducto]);
 
+  const categoriasEquipos = useMemo(
+    () => Array.from(new Set((equipos || []).map((e) => e.categoria || "Otros"))),
+    [equipos]
+  );
+
+  const marcasEquiposFiltradas = useMemo(() => {
+    return Array.from(
+      new Set(
+        (equipos || [])
+          .filter((e) => (categoriaEquipo ? (e.categoria || "Otros") === categoriaEquipo : true))
+          .map((e) => e.marca || e.proveedor || "Sin marca")
+      )
+    );
+  }, [equipos, categoriaEquipo]);
+
+  const equiposFiltrados = useMemo(() => {
+    return (equipos || []).filter((e) => {
+      const cat = e.categoria || "Otros";
+      const marca = e.marca || e.proveedor || "Sin marca";
+      if (categoriaEquipo && cat !== categoriaEquipo) return false;
+      if (marcaEquipo && marca !== marcaEquipo) return false;
+      return true;
+    });
+  }, [equipos, categoriaEquipo, marcaEquipo]);
+
+  function getItemByTipoYId(tipo, id) {
+    if (tipo === "producto") return productos.find((p) => p.id === Number(id)) || null;
+    return equipos.find((e) => e.id === Number(id)) || null;
+  }
+
+  // ===================== detalle =====================
+  function agregarItem() {
+    if (!itemSeleccionado) return;
+
+    const item = getItemByTipoYId(tipoItem, itemSeleccionado);
+    if (!item) return;
+
+    const cant = safeNumber(cantidad, 1);
     if (!cant || cant <= 0) {
-      Swal.fire(
-        "Cantidad inválida",
-        "La cantidad debe ser mayor que cero.",
-        "warning"
-      );
+      Swal.fire("Cantidad inválida", "Debe ser mayor que cero.", "warning");
       return;
     }
 
-    if (prod.cantidad != null && cant > Number(prod.cantidad)) {
-      Swal.fire(
-        "Stock insuficiente",
-        `Solo tienes ${prod.cantidad} unidades disponibles de "${prod.nombre}".`,
-        "warning"
-      );
+    const stock = item.cantidad == null ? null : safeNumber(item.cantidad, 0);
+    if (stock != null && cant > stock) {
+      Swal.fire("Stock insuficiente", `Solo tienes ${stock} unidades disponibles de "${item.nombre}".`, "warning");
       return;
     }
 
-    const precioBase = Number(prod.precio) || 0;
-    const extra = Number(ajustePrecio) || 0;
-    const precioFinalUnitario = precioBase + extra;
+    const precioBase = safeNumber(item.precio, 0);
+    const extra = allowPriceEdit ? safeNumber(extraUnitario, 0) : 0;
+    const precioUnitario = precioBase + extra;
 
-    if (precioFinalUnitario <= 0) {
-      Swal.fire(
-        "Precio inválido",
-        "El precio final por unidad debe ser mayor que cero.",
-        "warning"
-      );
+    if (precioUnitario <= 0) {
+      Swal.fire("Precio inválido", "El precio unitario debe ser mayor que cero.", "warning");
       return;
     }
 
-    setDetalle([
-      ...detalle,
+    setDetalle((prev) => [
+      ...prev,
       {
-        id: prod.id,
-        nombre: prod.nombre,
+        tipo: tipoItem,
+        item_id: Number(item.id),
+        nombre: item.nombre,
+        modelo: item.modelo || "",
         cantidad: cant,
         precioBase,
-        extra, // monto extra por unidad
+        extra,
+        precioUnitario,
       },
     ]);
 
-    setAjustePrecio(0);
+    setExtraUnitario(0);
+    setItemSeleccionado("");
+    setCantidad(1);
   }
 
-  function eliminarProducto(index) {
-    const nuevo = [...detalle];
-    nuevo.splice(index, 1);
-    setDetalle(nuevo);
+  function eliminarItem(index) {
+    setDetalle((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function calcularTotal() {
-    const subtotalProductos = detalle.reduce((acc, item) => {
-      const base = Number(item.precioBase) || 0;
-      const extra = Number(item.extra) || 0;
-      const cant = Number(item.cantidad) || 0;
-      const unit = base + extra;
-      if (unit <= 0 || cant <= 0) return acc;
+  function calcularSubtotalDetalle() {
+    return detalle.reduce((acc, it) => {
+      const cant = safeNumber(it.cantidad, 0);
+      const unit = safeNumber(it.precioUnitario, 0);
       return acc + unit * cant;
     }, 0);
-
-    const servicioNum = Number(precioServicio) || 0;
-    const baseTotal = subtotalProductos + servicioNum;
-
-    const desc = Number(descuento) || 0;
-    const total = baseTotal - (baseTotal * desc) / 100;
-
-    return isNaN(total) ? 0 : total;
   }
 
+  function calcularTotalConDescuento() {
+    const base = calcularSubtotalDetalle();
+    const desc = safeNumber(descuento, 0);
+    const total = base - (base * desc) / 100;
+    return Number.isFinite(total) ? total : 0;
+  }
+
+  // ===================== GUARDAR =====================
   async function guardarCotizacion(e) {
     e.preventDefault();
 
-    if (!cliente || !servicio) {
-      Swal.fire("Faltan datos", "Debes llenar cliente y servicio", "warning");
+    // Ahora lo obligatorio es clienteSel.id
+    if (!clienteSel?.id) {
+      Swal.fire("Falta cliente", "Busca y selecciona un cliente por Cédula/RNC antes de guardar.", "warning");
       return;
     }
 
-    if (detalle.length === 0 && !precioServicio) {
-      Swal.fire(
-        "Sin datos",
-        "Debes agregar al menos un producto o un precio de servicio",
-        "warning"
+    if (detalle.length === 0) {
+      Swal.fire("Sin productos/equipos", "Agrega al menos 1 item.", "warning");
+      return;
+    }
+
+    // vendedor: fuerza extra=0
+    const detalleSeguro = detalle.map((it) => {
+      const precioBase = safeNumber(it.precioBase, 0);
+      const cant = safeNumber(it.cantidad, 1);
+      const extra = allowPriceEdit ? safeNumber(it.extra, 0) : 0;
+      const unit = precioBase + extra;
+      return { ...it, extra, precioUnitario: unit, cantidad: cant };
+    });
+
+    const total = (() => {
+      const base = detalleSeguro.reduce(
+        (acc, it) => acc + safeNumber(it.precioUnitario, 0) * safeNumber(it.cantidad, 0),
+        0
       );
-      return;
-    }
-
-    const total = calcularTotal();
+      const desc = safeNumber(descuento, 0);
+      const t = base - (base * desc) / 100;
+      return Number.isFinite(t) ? t : 0;
+    })();
 
     if (total <= 0) {
-      Swal.fire(
-        "Total inválido",
-        "El total calculado debe ser mayor que cero",
-        "error"
-      );
+      Swal.fire("Total inválido", "El total debe ser mayor que cero.", "error");
       return;
     }
 
@@ -319,68 +617,86 @@ export default function Cotizaciones() {
       montoPendiente = Number((total - montoAnticipo).toFixed(2));
     }
 
-    const { data: cot, error } = await supabase
-      .from("cotizaciones")
-      .insert([
-        {
-          cliente,
-          total,
-          descuento: Number(descuento) || 0,
-          servicio,
-          nombre_servicio: nombreServicio || null,
-          precio_servicio: Number(precioServicio) || 0,
-          fecha: new Date().toISOString(),
-          estado: "pendiente",
-          usa_anticipo: usaAnticipo,
-          monto_anticipo: montoAnticipo,
-          monto_pendiente: montoPendiente,
-          solicitud_id: solicitudSeleccionada
-            ? Number(solicitudSeleccionada)
-            : null, // 🔗 vínculo con la solicitud/ticket
-        },
-      ])
-      .select()
-      .single();
+    // Insert cotización (YA con cliente_id)
+    const payloadCot = {
+      cliente_id: clienteSel.id,
+      cliente: clienteSel.nombre || cliente || null, // snapshot opcional
+      total,
+      descuento: safeNumber(descuento, 0),
+      fecha: new Date().toISOString(),
+      estado: "pendiente",
+      usa_anticipo: usaAnticipo,
+      monto_anticipo: montoAnticipo,
+      monto_pendiente: montoPendiente,
+      preventa_id: preventaSeleccionada ? Number(preventaSeleccionada) : null,
+      inventario_descontado: false,
+    };
 
-    if (error) {
+    const { data: cot, error } = await supabase.from("cotizaciones").insert([payloadCot]).select().single();
+
+    if (error || !cot) {
       console.error(error);
       Swal.fire("Error", "No se pudo guardar la cotización", "error");
       return;
     }
 
-    // Guardar detalle de productos
-    for (const d of detalle) {
-      const base = Number(d.precioBase) || 0;
-      const extra = Number(d.extra) || 0;
-      const cant = Number(d.cantidad) || 0;
-      const unit = base + extra;
+    // Insert detalle (productos + equipos)
+    for (const it of detalleSeguro) {
+      const cant = safeNumber(it.cantidad, 0);
+      const unit = safeNumber(it.precioUnitario, 0);
+      const baseSnap = safeNumber(it.precioBase, 0);
+      const extraSnap = safeNumber(it.extra, 0);
+      const subtotal = unit * cant;
 
-      await supabase.from("detalle_cotizacion").insert([
-        {
-          cotizacion_id: cot.id,
-          producto_id: d.id,
-          cantidad: cant,
-          subtotal: unit * cant,
-        },
-      ]);
+      const payload = {
+        cotizacion_id: cot.id,
+        cantidad: cant,
+        subtotal,
+        precio_base_snapshot: baseSnap,
+        extra_unitario: extraSnap,
+        precio_unitario: unit,
+        producto_id: it.tipo === "producto" ? it.item_id : null,
+        equipo_id: it.tipo === "equipo" ? it.item_id : null,
+      };
+
+      const { error: errDet } = await supabase.from("detalle_cotizacion").insert([payload]);
+      if (errDet) {
+        console.error(errDet);
+        Swal.fire("Error", "No se pudo guardar el detalle de la cotización.", "error");
+        return;
+      }
+    }
+
+    // Si está ligada a preventa, marcarla cotizada y guardar cliente_id ahí también (por si estaba null)
+    if (preventaSeleccionada) {
+      await supabase
+        .from("preventas")
+        .update({ estado: "cotizada", cliente_id: clienteSel.id })
+        .eq("id", Number(preventaSeleccionada));
     }
 
     Swal.fire("Éxito", "Cotización guardada correctamente", "success");
 
+    // Reset
     setCliente("");
-    setServicio("");
-    setDetalle([]);
-    setProductoSeleccionado("");
-    setCantidad(1);
+    setDoc("");
+    setClienteSel(null);
     setDescuento(0);
-    setNombreServicio("");
-    setPrecioServicio(0);
+    setDetalle([]);
+    setTipoItem("producto");
+    setItemSeleccionado("");
+    setCantidad(1);
+    setExtraUnitario(0);
     setUsaAnticipo(false);
-    setAjustePrecio(0);
-    setCategoriaSeleccionada("");
-    setMarcaSeleccionada("");
-    setSolicitudSeleccionada("");
+    setCategoriaProducto("");
+    setMarcaProducto("");
+    setCategoriaEquipo("");
+    setMarcaEquipo("");
+    setPreventaSeleccionada("");
+    setPreventaCargada(null);
+
     fetchCotizaciones();
+    fetchPreventas();
   }
 
   async function eliminarCotizacion(id) {
@@ -392,260 +708,280 @@ export default function Cotizaciones() {
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
     });
-
     if (!result.isConfirmed) return;
 
     await supabase.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
     await supabase.from("cotizaciones").delete().eq("id", id);
 
     setCotizaciones((prev) => prev.filter((c) => c.id !== id));
-
     Swal.fire("Eliminada", "La cotización ha sido eliminada.", "success");
   }
 
-  const totalActual = calcularTotal();
-  const anticipoActual = usaAnticipo
-    ? Number((totalActual * 0.5).toFixed(2))
-    : 0;
-  const pendienteActual = usaAnticipo
-    ? Number((totalActual - anticipoActual).toFixed(2))
-    : 0;
-
-  // Helper para mostrar nombre de servicio desde servicio_id de la solicitud
-  function getNombreServicioDesdeSolicitud(solicitud) {
-    if (!solicitud?.servicio_id) return "";
-    const s = servicios.find((svc) => svc.id === solicitud.servicio_id);
-    return s?.nombre || "";
-  }
+  const totalActual = calcularTotalConDescuento();
+  const anticipoActual = usaAnticipo ? Number((totalActual * 0.5).toFixed(2)) : 0;
+  const pendienteActual = usaAnticipo ? Number((totalActual - anticipoActual).toFixed(2)) : 0;
 
   return (
     <Wrapper>
       <Form onSubmit={guardarCotizacion}>
         <h2 style={{ color: "#00bcd4" }}>Nueva Cotización</h2>
 
-        <label>Cliente</label>
-        <Input
-          value={cliente}
-          onChange={(e) => setCliente(e.target.value)}
-          placeholder="Nombre del cliente"
-        />
+        {preventaIdFromUrl && (
+          <div
+            style={{
+              marginBottom: "1rem",
+              padding: "0.8rem 1rem",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.08)",
+              background: "rgba(0,188,212,0.04)",
+              fontSize: "0.92rem",
+            }}
+          >
+            <strong>Preload activo</strong>: esta cotización se está precargando desde la preventa{" "}
+            <strong>#{preventaIdFromUrl}</strong>.{" "}
+            {loadingPreventa ? <span>Cargando items...</span> : <span>Items precargados.</span>}
+          </div>
+        )}
 
-        <label>Servicio</label>
-        <Select
-          value={servicio}
-          onChange={(e) => setServicio(e.target.value)}
-        >
-          <option value="">Seleccione un servicio</option>
-          {servicios.map((s) => (
-            <option key={s.id} value={s.nombre}>
-              {s.nombre}
-            </option>
-          ))}
-        </Select>
+        <label>Cliente (buscar por documento)</label>
 
-        {/* 🔗 VINCULAR SOLICITUD / TICKET */}
-        <label>Vincular solicitud / ticket</label>
+        <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <Select
+              value={tipoCliente}
+              onChange={(e) => {
+                setTipoCliente(e.target.value);
+                setClienteSel(null);
+                setDoc("");
+              }}
+              style={{ maxWidth: 260 }}
+            >
+              <option value="persona">Persona (Cédula)</option>
+              <option value="empresa">Empresa (RNC)</option>
+            </Select>
+
+            <Input
+              value={doc}
+              onChange={(e) => setDoc(e.target.value)}
+              placeholder={tipoCliente === "persona" ? "Cédula" : "RNC"}
+              style={{ minWidth: 220, flex: 1 }}
+            />
+
+            <Button type="button" onClick={handleBuscarCliente} disabled={clienteLoading || !doc.trim()}>
+              {clienteLoading ? "Buscando..." : "Buscar cliente"}
+            </Button>
+          </div>
+
+          <div>
+            <strong>Seleccionado:</strong> {clienteSel ? labelCliente(clienteSel) : "—"}
+            {clienteSel && (
+              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
+                Recurrente: <strong>{clienteSel.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
+                <strong>{clienteSel.puede_fiar ? "Sí" : "No"}</strong>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <label>Vincular preventa</label>
         <Select
-          value={solicitudSeleccionada}
+          value={preventaSeleccionada}
           onChange={(e) => {
             const value = e.target.value;
-            setSolicitudSeleccionada(value);
+            setPreventaSeleccionada(value);
 
-            if (!value) return;
-
-            const solicitud = solicitudes.find(
-              (sol) => sol.id === Number(value)
-            );
-            if (!solicitud) return;
-
-            // Autorelleno de cliente
-            if (solicitud.cliente && !cliente) {
-              setCliente(solicitud.cliente);
-            }
-
-            // Autorelleno de servicio desde servicio_id
-            const nombreServ = getNombreServicioDesdeSolicitud(solicitud);
-            if (nombreServ && !servicio) {
-              setServicio(nombreServ);
-            }
+            if (value) preloadDesdePreventa(Number(value));
+            else setPreventaCargada(null);
           }}
         >
-          <option value="">Sin solicitud ligada</option>
-          {solicitudes.map((sol) => (
-            <option key={sol.id} value={sol.id}>
-              {`#${sol.id} - ${
-                sol.numero_caso || "SIN CASO"
-              } - ${sol.cliente || "Sin nombre"} - ${
-                getNombreServicioDesdeSolicitud(sol) || "Servicio"
-              } - ${sol.estado || "Agendado"}`}
-            </option>
-          ))}
-        </Select>
-
-        {/* FILTROS Y PRODUCTO */}
-        <label>Categoría</label>
-        <Select
-          value={categoriaSeleccionada}
-          onChange={(e) => {
-            setCategoriaSeleccionada(e.target.value);
-            setMarcaSeleccionada("");
-            setProductoSeleccionado("");
-          }}
-        >
-          <option value="">Todas</option>
-          {categorias.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </Select>
-
-        <label>Marca</label>
-        <Select
-          value={marcaSeleccionada}
-          onChange={(e) => {
-            setMarcaSeleccionada(e.target.value);
-            setProductoSeleccionado("");
-          }}
-          disabled={!categoriaSeleccionada && categorias.length > 0}
-        >
-          <option value="">Todas</option>
-          {marcasFiltradas.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </Select>
-
-        <label>Producto</label>
-        <Select
-          value={productoSeleccionado}
-          onChange={(e) => setProductoSeleccionado(e.target.value)}
-        >
-          <option value="">Seleccione un producto</option>
-          {productosFiltrados.map((p) => (
+          <option value="">Sin preventa</option>
+          {preventas.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.nombre}
-              {p.modelo ? ` - ${p.modelo}` : ""} — RD${p.precio}
+              {`#${p.id} — ${p.numero_caso || "SIN CASO"} — ${p.cliente || "-"} — ${p.estado || "-"}`}
             </option>
           ))}
         </Select>
+
+        <Divider />
+
+        <label>Tipo</label>
+        <Select
+          value={tipoItem}
+          onChange={(e) => {
+            setTipoItem(e.target.value);
+            setItemSeleccionado("");
+            setCantidad(1);
+            setExtraUnitario(0);
+          }}
+        >
+          <option value="producto">Producto</option>
+          <option value="equipo">Equipo</option>
+        </Select>
+
+        {tipoItem === "producto" ? (
+          <>
+            <label>Categoría (productos)</label>
+            <Select
+              value={categoriaProducto}
+              onChange={(e) => {
+                setCategoriaProducto(e.target.value);
+                setMarcaProducto("");
+                setItemSeleccionado("");
+              }}
+            >
+              <option value="">Todas</option>
+              {categoriasProductos.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </Select>
+
+            <label>Marca / Proveedor (productos)</label>
+            <Select
+              value={marcaProducto}
+              onChange={(e) => {
+                setMarcaProducto(e.target.value);
+                setItemSeleccionado("");
+              }}
+            >
+              <option value="">Todas</option>
+              {marcasProductosFiltradas.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+
+            <label>Producto</label>
+            <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
+              <option value="">Seleccione un producto</option>
+              {productosFiltrados.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                  {p.modelo ? ` - ${p.modelo}` : ""} — RD${safeNumber(p.precio, 0)}
+                </option>
+              ))}
+            </Select>
+          </>
+        ) : (
+          <>
+            <label>Categoría (equipos)</label>
+            <Select
+              value={categoriaEquipo}
+              onChange={(e) => {
+                setCategoriaEquipo(e.target.value);
+                setMarcaEquipo("");
+                setItemSeleccionado("");
+              }}
+            >
+              <option value="">Todas</option>
+              {categoriasEquipos.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </Select>
+
+            <label>Marca / Proveedor (equipos)</label>
+            <Select
+              value={marcaEquipo}
+              onChange={(e) => {
+                setMarcaEquipo(e.target.value);
+                setItemSeleccionado("");
+              }}
+            >
+              <option value="">Todas</option>
+              {marcasEquiposFiltradas.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+
+            <label>Equipo</label>
+            <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
+              <option value="">Seleccione un equipo</option>
+              {equiposFiltrados.map((eq) => (
+                <option key={eq.id} value={eq.id}>
+                  {eq.nombre}
+                  {eq.modelo ? ` - ${eq.modelo}` : ""} — RD${safeNumber(eq.precio, 0)}
+                </option>
+              ))}
+            </Select>
+          </>
+        )}
 
         <label>Cantidad</label>
         <Input
           type="number"
-          value={isNaN(cantidad) ? "" : cantidad}
+          value={cantidad}
           min="1"
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "") {
-              setCantidad("");
-            } else {
-              const num = parseInt(v);
-              if (num < 0) {
-                setCantidad(1);
-              } else {
-                setCantidad(isNaN(num) ? 1 : num);
-              }
-            }
-          }}
+          onChange={(e) => setCantidad(e.target.value === "" ? 1 : Number(e.target.value))}
         />
 
-        <label>Monto extra por unidad (opcional)</label>
+        <label>Monto extra por unidad</label>
         <Input
           type="number"
-          value={ajustePrecio === 0 ? "" : ajustePrecio}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "") {
-              setAjustePrecio(0);
-            } else {
-              const num = parseFloat(v);
-              setAjustePrecio(isNaN(num) ? 0 : num);
-            }
-          }}
-          placeholder="Ej: 1000 para subir el precio por unidad"
+          value={extraUnitario === 0 ? "" : extraUnitario}
+          onChange={(e) => setExtraUnitario(e.target.value === "" ? 0 : Number(e.target.value))}
+          placeholder={allowPriceEdit ? "Ej: 1000" : "Bloqueado para vendedor (precios fijos)"}
+          disabled={!allowPriceEdit}
         />
 
-        <Button type="button" onClick={agregarProducto}>
-          Agregar producto
+        <Button type="button" onClick={agregarItem} disabled={loadingPreventa}>
+          Agregar item
         </Button>
 
         {detalle.length > 0 && (
-          <Table>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cant.</th>
-                <th>Precio base</th>
-                <th>Extra / unidad</th>
-                <th>Subtotal</th>
-                <th>Quitar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detalle.map((d, i) => {
-                const base = Number(d.precioBase) || 0;
-                const extra = Number(d.extra) || 0;
-                const cant = Number(d.cantidad) || 0;
-                const subtotal = (base + extra) * cant;
-
-                return (
-                  <tr key={i}>
-                    <td>{d.nombre}</td>
-                    <td>{cant}</td>
-                    <td>RD${base.toFixed(2)}</td>
-                    <td>RD${extra.toFixed(2)}</td>
-                    <td>RD${subtotal.toFixed(2)}</td>
-                    <td>
-                      <Trash2
-                        size={20}
-                        className="delete-btn"
-                        onClick={() => eliminarProducto(i)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
+          <>
+            <Divider />
+            <Table>
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Item</th>
+                  <th>Cant.</th>
+                  <th>Precio base</th>
+                  <th>Extra / unidad</th>
+                  <th>Precio unitario</th>
+                  <th>Subtotal</th>
+                  <th>Quitar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalle.map((d, i) => {
+                  const subtotal = safeNumber(d.precioUnitario, 0) * safeNumber(d.cantidad, 0);
+                  return (
+                    <tr key={i}>
+                      <td>{d.tipo}</td>
+                      <td>
+                        {d.nombre}
+                        {d.modelo ? ` - ${d.modelo}` : ""}
+                      </td>
+                      <td>{safeNumber(d.cantidad, 0)}</td>
+                      <td>RD${safeNumber(d.precioBase, 0).toFixed(2)}</td>
+                      <td>RD${safeNumber(d.extra, 0).toFixed(2)}</td>
+                      <td>RD${safeNumber(d.precioUnitario, 0).toFixed(2)}</td>
+                      <td>RD${subtotal.toFixed(2)}</td>
+                      <td>
+                        <Trash2 size={20} className="delete-btn" onClick={() => eliminarItem(i)} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </>
         )}
-
-        <Divider />
-
-        <label>Descripción del servicio (instalación)</label>
-        <Input
-          placeholder="Ej: Instalación completa de cámaras"
-          value={nombreServicio}
-          onChange={(e) => setNombreServicio(e.target.value)}
-        />
-
-        <label>Precio del servicio</label>
-        <Input
-          type="number"
-          value={precioServicio === 0 ? "" : precioServicio}
-          onChange={(e) =>
-            setPrecioServicio(
-              e.target.value === "" ? 0 : Number(e.target.value)
-            )
-          }
-        />
 
         <Divider />
 
         <label>Descuento (%)</label>
         <Input
           type="number"
-          value={isNaN(descuento) ? "" : descuento}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "") {
-              setDescuento(0);
-            } else {
-              const num = parseFloat(v);
-              setDescuento(isNaN(num) ? 0 : num);
-            }
-          }}
+          value={descuento}
+          onChange={(e) => setDescuento(e.target.value === "" ? 0 : Number(e.target.value))}
         />
 
         <div
@@ -658,33 +994,28 @@ export default function Cotizaciones() {
           }}
         >
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={usaAnticipo}
-              onChange={(e) => setUsaAnticipo(e.target.checked)}
-            />
+            <input type="checkbox" checked={usaAnticipo} onChange={(e) => setUsaAnticipo(e.target.checked)} />
             <span>Permitir pago 50% inicial / 50% restante</span>
           </label>
 
           {usaAnticipo && (
             <div style={{ marginTop: 8, fontSize: "0.9rem" }}>
               <div>
-                Total estimado:{" "}
-                <strong>RD${totalActual.toFixed(2)}</strong>
+                Total estimado: <strong>RD${totalActual.toFixed(2)}</strong>
               </div>
               <div>
-                Anticipo (50%):{" "}
-                <strong>RD${anticipoActual.toFixed(2)}</strong>
+                Anticipo (50%): <strong>RD${anticipoActual.toFixed(2)}</strong>
               </div>
               <div>
-                Pendiente (50%):{" "}
-                <strong>RD${pendienteActual.toFixed(2)}</strong>
+                Pendiente (50%): <strong>RD${pendienteActual.toFixed(2)}</strong>
               </div>
             </div>
           )}
         </div>
 
-        <Button type="submit">Guardar cotización</Button>
+        <Button type="submit" disabled={loadingPreventa}>
+          Guardar cotización
+        </Button>
       </Form>
 
       <h3>Historial de cotizaciones</h3>
@@ -693,8 +1024,7 @@ export default function Cotizaciones() {
           <tr>
             <th>ID</th>
             <th>Cliente</th>
-            <th>Servicio</th>
-            <th>Ticket / Solicitud</th>
+            <th>Preventa</th>
             <th>Total</th>
             <th>Estado</th>
             <th>Anticipo</th>
@@ -703,43 +1033,39 @@ export default function Cotizaciones() {
           </tr>
         </thead>
         <tbody>
-          {cotizaciones.map((c) => (
-            <tr key={c.id}>
-              <td>{c.id}</td>
-              <td>{c.cliente}</td>
-              <td>{c.servicio}</td>
-              <td>{c.solicitud_id ? `#${c.solicitud_id}` : "-"}</td>
-              <td>
-                RD$
-                {Number(c.total || 0).toLocaleString("es-DO", {
-                  minimumFractionDigits: 2,
-                })}
-              </td>
-              <td>
-                <EstadoBadge estado={c.estado || "pendiente"}>
-                  ● {formatearEstado(c.estado)}
-                </EstadoBadge>
-              </td>
-              <td>
-                {c.usa_anticipo
-                  ? `Inicial: RD$${c.monto_anticipo} / Restante: RD$${c.monto_pendiente}`
-                  : "No"}
-              </td>
-              <td>{new Date(c.fecha).toLocaleDateString()}</td>
-              <td style={{ display: "flex", gap: "0.5rem" }}>
-                <Eye
-                  size={18}
-                  style={{ cursor: "pointer", color: "#00bcd4" }}
-                  onClick={() => navigate(`/admin/cotizaciones/${c.id}`)}
-                />
-                <Trash2
-                  size={18}
-                  className="delete-btn"
-                  onClick={() => eliminarCotizacion(c.id)}
-                />
-              </td>
-            </tr>
-          ))}
+          {cotizaciones.map((c) => {
+            const cli = c.cliente_ref || null;
+            const clienteLabel = cli ? labelCliente(cli) : (c.cliente || "-");
+
+            return (
+              <tr key={c.id}>
+                <td>{c.id}</td>
+                <td>{clienteLabel}</td>
+                <td>{c.preventa_id ? `#${c.preventa_id}` : "-"}</td>
+                <td>
+                  RD$
+                  {safeNumber(c.total, 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}
+                </td>
+                <td>
+                  <EstadoBadge estado={c.estado || "pendiente"}>● {formatearEstado(c.estado)}</EstadoBadge>
+                </td>
+                <td>
+                  {c.usa_anticipo
+                    ? `Inicial: RD$${safeNumber(c.monto_anticipo, 0)} / Restante: RD$${safeNumber(c.monto_pendiente, 0)}`
+                    : "No"}
+                </td>
+                <td>{c.fecha ? new Date(c.fecha).toLocaleDateString() : "-"}</td>
+                <td style={{ display: "flex", gap: "0.5rem" }}>
+                  <Eye
+                    size={18}
+                    style={{ cursor: "pointer", color: "#00bcd4" }}
+                    onClick={() => navigate(`/admin/cotizaciones/${c.id}`)}
+                  />
+                  <Trash2 size={18} className="delete-btn" onClick={() => eliminarCotizacion(c.id)} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
     </Wrapper>

@@ -1,29 +1,70 @@
 // src/pages/admin/Tickets.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import emailjs from "emailjs-com";
-import {
-  ClipboardList,
-  UserCog,
-  CheckCircle,
-  Phone,
-  FileText,
-  MessageSquare,
-} from "lucide-react";
+import { Eye, FilePlus2, RefreshCw, Search } from "lucide-react";
 
-// === EMAILJS CONFIG ===
-const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-const EMAILJS_TEMPLATE_ASIGNACION_ID =
-  import.meta.env.VITE_EMAILJS_TEMPLATE_ASIGNACION_ID;
-const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-
-// === ESTILOS GENERALES ===
+/* ==================== ESTILOS ==================== */
 const Container = styled.section`
   width: 100%;
   padding: 2rem;
+  color: ${({ theme }) => theme.text};
+`;
+
+const TopBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+`;
+
+const FiltersRow = styled.div`
+  display: grid;
+  grid-template-columns: 1.6fr 0.8fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+  }
+`;
+
+const SearchBox = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+
+  svg {
+    opacity: 0.8;
+  }
+
+  input {
+    border: none;
+    outline: none;
+    width: 100%;
+    background: transparent;
+    color: ${({ theme }) => theme.text};
+    font-size: 0.95rem;
+  }
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.cardBackground};
   color: ${({ theme }) => theme.text};
 `;
 
@@ -32,24 +73,20 @@ const Tabs = styled.div`
   justify-content: flex-start;
   gap: 1rem;
   border-bottom: 2px solid ${({ theme }) => theme.border};
-  margin-bottom: 2rem;
+  margin-bottom: 1.3rem;
+  flex-wrap: wrap;
 `;
 
 const TabButton = styled.button`
   background: none;
   border: none;
-  font-weight: 600;
-  font-size: 1rem;
-  padding: 0.8rem 1.5rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.8rem 1.1rem;
   color: ${({ $active, theme }) => ($active ? theme.accent : theme.text)};
-  border-bottom: 3px solid
-    ${({ $active, theme }) => ($active ? theme.accent : "transparent")};
+  border-bottom: 3px solid ${({ $active, theme }) => ($active ? theme.accent : "transparent")};
   cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.accent};
-  }
+  transition: all 0.2s ease;
 `;
 
 const Table = styled.table`
@@ -62,7 +99,7 @@ const Table = styled.table`
 
   th,
   td {
-    padding: 1rem;
+    padding: 0.95rem 1rem;
     text-align: left;
     border-bottom: 1px solid ${({ theme }) => theme.border};
     vertical-align: top;
@@ -71,9 +108,9 @@ const Table = styled.table`
   th {
     background-color: ${({ theme }) => theme.accent};
     color: white;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
   }
 
   tr:hover {
@@ -82,1145 +119,456 @@ const Table = styled.table`
   }
 `;
 
-const ActionButton = styled.button`
-  background-color: ${({ theme }) => theme.accent};
-  border: none;
-  color: white;
-  border-radius: 6px;
-  padding: 0.5rem 0.8rem;
-  cursor: pointer;
-  font-size: 0.8rem;
-  margin-right: 0.5rem;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  transition: 0.3s;
-
-  &:hover {
-    opacity: 0.9;
-    transform: scale(1.03);
-  }
-`;
-
-// === ESTILOS DETALLE TIPO WHATSAPP ===
-const DetailWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-  margin-top: 1rem;
-`;
-
-const TicketBox = styled.div`
-  width: 100%;
-  max-width: 1000px;
-  background: ${({ theme }) => theme.cardBackground};
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`;
-
-const TicketHeader = styled.div`
-  padding: 1.2rem 1.5rem;
-  border-bottom: 1px solid ${({ theme }) => theme.border};
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  background: ${({ theme }) => theme.inputBackground};
-`;
-
-const TicketHeaderLeft = styled.div``;
-
-const TicketTitle = styled.h2`
-  margin: 0;
-  color: ${({ theme }) => theme.accent};
-`;
-
-const TicketSubTitle = styled.p`
-  margin: 0.2rem 0 0;
-  font-size: 0.9rem;
-  opacity: 0.85;
-`;
-
-const TicketHeaderRight = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 0.4rem;
-`;
-
-const EstadoBadge = styled.span`
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: bold;
-
-  background: ${({ $estado }) =>
-    $estado === "Completado"
-      ? "rgba(46, 204, 113, 0.18)"
-      : $estado === "En progreso" || $estado === "En proceso"
-      ? "rgba(26, 188, 156, 0.18)"
-      : $estado === "Requiere reprogramación"
-      ? "rgba(243, 156, 18, 0.18)"
-      : $estado === "Cliente no se encontraba"
-      ? "rgba(231, 76, 60, 0.18)"
-      : "rgba(241, 196, 15, 0.18)"};
-
-  color: ${({ $estado }) =>
-    $estado === "Completado"
-      ? "#27ae60"
-      : $estado === "En progreso" || $estado === "En proceso"
-      ? "#16a085"
-      : $estado === "Requiere reprogramación"
-      ? "#e67e22"
-      : $estado === "Cliente no se encontraba"
-      ? "#c0392b"
-      : "#b7950b"};
-`;
-
-const HeaderActions = styled.div`
+const ActionsCell = styled.div`
   display: flex;
   gap: 0.5rem;
-
-  a,
-  button {
-    border-radius: 20px;
-    border: 1px solid ${({ theme }) => theme.border};
-    padding: 0.3rem 0.7rem;
-    font-size: 0.8rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: ${({ theme }) => theme.cardBackground};
-    cursor: pointer;
-    text-decoration: none;
-    color: ${({ theme }) => theme.text};
-
-    &:hover {
-      background: ${({ theme }) => theme.hover};
-    }
-  }
+  flex-wrap: wrap;
 `;
 
-const DetailContent = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1.2fr);
-  min-height: 450px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const InfoPanel = styled.div`
-  padding: 1rem 1.5rem;
-  border-right: 1px solid ${({ theme }) => theme.border};
-
-  @media (max-width: 900px) {
-    border-right: none;
-    border-bottom: 1px solid ${({ theme }) => theme.border};
-  }
-`;
-
-const SectionTitle = styled.h3`
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
-  border-bottom: 1px solid ${({ theme }) => theme.border};
-  padding-bottom: 0.3rem;
-`;
-
-const InfoRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-  margin: 0.3rem 0;
-
-  span:first-child {
-    font-weight: 600;
-  }
-`;
-
-// Tabla compacta para equipos/materiales (sin precios)
-const EquiposTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 0.4rem;
-  font-size: 0.85rem;
-
-  th,
-  td {
-    padding: 0.4rem 0.3rem;
-    border-bottom: 1px solid ${({ theme }) => theme.border};
-  }
-
-  th {
-    background: ${({ theme }) => theme.inputBackground};
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.8rem;
-  }
-`;
-
-const ChatPanel = styled.div`
-  display: flex;
-  flex-direction: column;
-  background: ${({ theme }) =>
-    theme.mode === "dark" ? "#0b141a" : "#f5f7fb"};
-`;
-
-const ChatMessages = styled.div`
-  flex: 1;
-  padding: 1rem 1.3rem;
-  overflow-y: auto;
-  max-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-`;
-
-const ChatBubble = styled.div`
-  max-width: 80%;
-  margin: 0.4rem 0;
-  padding: 0.8rem 1rem;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  word-wrap: break-word;
-
-  background: ${({ $isMine, theme }) =>
-    $isMine ? theme.accent : theme.cardBackground};
-  color: ${({ $isMine, theme }) => ($isMine ? "#fff" : theme.text)};
-
-  align-self: ${({ $isMine }) => ($isMine ? "flex-end" : "flex-start")};
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
-`;
-
-const ChatEstado = styled.span`
-  font-size: 0.75rem;
-  display: inline-block;
-  margin-top: 0.2rem;
-  opacity: 0.9;
-`;
-
-const ChatMeta = styled.div`
-  font-size: 0.7rem;
-  opacity: 0.8;
-  margin-top: 0.2rem;
-  text-align: right;
-`;
-
-const EvidenciaImg = styled.img`
-  margin-top: 0.4rem;
-  max-width: 200px;
-  max-height: 150px;
+const Btn = styled.button`
+  background-color: ${({ theme }) => theme.accent};
+  border: none;
+  color: #fff;
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  object-fit: cover;
-  display: block;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: 0.2s;
+
+  &:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+  }
 `;
 
-const CloseTicketButton = styled(ActionButton)`
-  background-color: #e74c3c;
+const SecondaryBtn = styled(Btn)`
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  border: 1px solid ${({ theme }) => theme.border};
 `;
 
-// === COMPONENTE PRINCIPAL ===
+const Empty = styled.div`
+  padding: 2rem 1rem;
+  text-align: center;
+  opacity: 0.8;
+`;
+
+/* ==================== HELPERS ==================== */
+function safeText(v) {
+  return String(v ?? "").trim();
+}
+
+function labelClienteFromJoin(row) {
+  const c = row?.cliente_ref;
+  if (!c) return row?.cliente || "-";
+
+  if (c.tipo_cliente === "empresa") {
+    const rnc = c.empresa_rnc || "-";
+    return `${c.nombre} (RNC: ${rnc})`;
+  }
+  const ced = c.cedula || "-";
+  return `${c.nombre} (Cédula: ${ced})`;
+}
+
+function matchesQueryPreventa(preventa, q) {
+  if (!q) return true;
+  const p = preventa || {};
+  const c = p.cliente_ref || {};
+
+  const haystack = [
+    p.id,
+    p.numero_caso,
+    p.cliente,
+    p.tipo_cliente,
+    p.email,
+    p.telefono,
+    p.cedula,
+    p.empresa_rnc,
+    c.id,
+    c.nombre,
+    c.cedula,
+    c.empresa_rnc,
+    c.email,
+    c.telefono,
+  ]
+    .map((x) => safeText(x).toLowerCase())
+    .join(" | ");
+
+  return haystack.includes(q);
+}
+
+function matchesQueryCotizacion(cot, q) {
+  if (!q) return true;
+  const c = cot || {};
+  const cli = c.cliente_ref || {};
+  const prev = c.preventa_ref || {};
+
+  const haystack = [
+    c.id,
+    c.estado,
+    c.numero_caso,
+    c.preventa_id,
+    c.solicitud_id,
+    c.cliente,
+    cli.id,
+    cli.nombre,
+    cli.cedula,
+    cli.empresa_rnc,
+    cli.email,
+    cli.telefono,
+    prev.id,
+    prev.numero_caso,
+  ]
+    .map((x) => safeText(x).toLowerCase())
+    .join(" | ");
+
+  return haystack.includes(q);
+}
+
+function withinDateWindow(record, windowKey, dateField) {
+  if (!windowKey || windowKey === "all") return true;
+  const raw = record?.[dateField];
+  if (!raw) return true;
+
+  const created = new Date(raw).getTime();
+  if (!Number.isFinite(created)) return true;
+
+  const now = Date.now();
+
+  if (windowKey === "today") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return created >= d.getTime();
+  }
+
+  const days = Number(windowKey);
+  if (!Number.isFinite(days) || days <= 0) return true;
+
+  const ms = days * 24 * 60 * 60 * 1000;
+  return created >= now - ms;
+}
+
+/* ==================== COMPONENTE ==================== */
 export default function Tickets() {
-  const [tab, setTab] = useState("solicitudes");
-  const [solicitudes, setSolicitudes] = useState([]);
-  const [activos, setActivos] = useState([]);
-  const [finalizados, setFinalizados] = useState([]);
-  const [cancelados, setCancelados] = useState([]);
+  const navigate = useNavigate();
 
-  const [vendedors, setvendedors] = useState([]);
+  // preventas tabs + tab almacen
+  const [tab, setTab] = useState("enviada"); // enviada/en_revision/cotizando/cotizada/cerrada/cancelada/almacen
+  const [loading, setLoading] = useState(true);
 
-  // Para DETALLES TICKET
-  const [ticketSeleccionado, setTicketSeleccionado] = useState(null);
-  const [historial, setHistorial] = useState([]);
-  const [requests, setRequests] = useState([]);
+  const [preventas, setPreventas] = useState([]);
+  const [almacenCotizaciones, setAlmacenCotizaciones] = useState([]); // cotizaciones en preparación/almacén
 
-  // 🔗 Cotización ligada a este ticket
-  const [cotizacionLigada, setCotizacionLigada] = useState(null);
-  const [detalleCotizacion, setDetalleCotizacion] = useState([]);
+  // búsqueda y filtro
+  const [query, setQuery] = useState("");
+  const [dateWindow, setDateWindow] = useState("7"); // today | 7 | 30 | 90 | all
 
   useEffect(() => {
     cargarTodo();
   }, []);
 
   async function cargarTodo() {
-    obtenervendedors();
-    obtenerSolicitudes();
-    obtenerTicketsCategorizados();
+    try {
+      setLoading(true);
+
+      // 1) PREVENTAS (con join a clientes)
+      const { data: prevData, error: prevErr } = await supabase
+        .from("preventas")
+        .select(`
+          *,
+          cliente_ref:clientes!preventas_cliente_id_fkey (
+            id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, es_recurrente, puede_fiar
+          )
+        `)
+        .order("creado_en", { ascending: false });
+
+      if (prevErr) throw prevErr;
+      setPreventas(prevData || []);
+
+      // 2) COTIZACIONES EN ALMACÉN (estado = "preparacion" por ahora)
+      //    Nota: aquí también traemos preventa para mostrar #Caso
+      const { data: cotData, error: cotErr } = await supabase
+        .from("cotizaciones")
+        .select(`
+          id, estado, fecha, total, descuento, numero_caso, preventa_id, solicitud_id, cliente,
+          cliente_ref:clientes!cotizaciones_cliente_id_fkey (
+            id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, es_recurrente, puede_fiar
+          ),
+          preventa_ref:preventas!cotizaciones_preventa_id_fkey (
+            id, numero_caso
+          )
+        `)
+        .eq("estado", "preparacion")
+        .order("fecha", { ascending: false });
+
+      if (cotErr) throw cotErr;
+      setAlmacenCotizaciones(cotData || []);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudieron cargar los tickets.", "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const obtenervendedors = async () => {
-    const { data } = await supabase
-      .from("usuarios")
-      .select("email, nombre")
-      .eq("rol", "vendedor");
-    setvendedors(data || []);
-  };
+  const counts = useMemo(() => {
+    const c = {
+      enviada: 0,
+      en_revision: 0,
+      cotizando: 0,
+      cotizada: 0,
+      cerrada: 0,
+      cancelada: 0,
+      almacen: 0,
+    };
+    for (const p of preventas) {
+      if (c[p.estado] !== undefined) c[p.estado]++;
+    }
+    c.almacen = (almacenCotizaciones || []).length;
+    return c;
+  }, [preventas, almacenCotizaciones]);
 
-  // === 1. SOLICITUDES (estado = "Solicitud enviada")
-  const obtenerSolicitudes = async () => {
-    const { data } = await supabase
-      .from("solicitudes")
-      .select("*, servicios(nombre)")
-      .eq("estado", "Solicitud enviada")
-      .order("fecha", { ascending: false });
+  const listFiltered = useMemo(() => {
+    const q = safeText(query).toLowerCase();
 
-    const formatted = (data || []).map((item) => ({
-      ...item,
-      servicio_nombre: item.servicios?.nombre || "No especificado",
-      estadoFinal: item.estado_solicitud || item.estado,
-    }));
-
-    setSolicitudes(formatted);
-  };
-
-  // === 2. TICKETS Categorizados
-  const obtenerTicketsCategorizados = async () => {
-    const { data } = await supabase
-      .from("solicitudes")
-      .select("*, servicios(nombre)")
-      .neq("estado", "Solicitud enviada")
-      .order("fecha", { ascending: false });
-
-    const formatted = (data || []).map((item) => {
-      const estadoFinal = item.estado_solicitud
-        ? item.estado_solicitud
-        : item.estado;
-
-      return {
-        ...item,
-        estadoFinal,
-        servicio_nombre: item.servicios?.nombre || "No especificado",
-      };
-    });
-
-    setActivos(formatted.filter((t) => estadoEsActivo(t.estadoFinal)));
-    setFinalizados(formatted.filter((t) => estadoEsFinal(t.estadoFinal)));
-    setCancelados(formatted.filter((t) => estadoEsCancelado(t.estadoFinal)));
-  };
-
-  function estadoEsActivo(e) {
-    return [
-      "pendiente",
-      "Agendado",
-      "En proceso",
-      "En progreso",
-      "Requiere reprogramación",
-      "Pendiente de materiales",
-    ].includes(e);
-  }
-
-  function estadoEsFinal(e) {
-    return ["Completado", "Finalizado"].includes(e);
-  }
-
-  function estadoEsCancelado(e) {
-    return ["Cancelado", "Cliente no se encontraba"].includes(e);
-  }
-
-  function obtenerEstadoTicket(t) {
-    if (!t) return "";
-    return t.estadoFinal || t.estado_solicitud || t.estado || "Agendado";
-  }
-
-  // === Cargar cotización ligada + detalle de equipos ===
-  async function cargarCotizacionYDetalle(ticketId) {
-    setCotizacionLigada(null);
-    setDetalleCotizacion([]);
-
-    // Buscar cotización ligada por solicitud_id
-    const { data: cotList, error: errCot } = await supabase
-      .from("cotizaciones")
-      .select("*")
-      .eq("solicitud_id", ticketId)
-      .order("id", { ascending: false });
-
-    if (errCot || !cotList || cotList.length === 0) {
-      setCotizacionLigada(null);
-      setDetalleCotizacion([]);
-      return;
+    // TAB ALMACÉN
+    if (tab === "almacen") {
+      return (almacenCotizaciones || [])
+        .filter((c) => withinDateWindow(c, dateWindow, "fecha"))
+        .filter((c) => matchesQueryCotizacion(c, q));
     }
 
-    const cot = cotList[0];
+    // TABS PREVENTAS
+    const base = (preventas || []).filter((p) => p.estado === tab);
+    return base
+      .filter((p) => withinDateWindow(p, dateWindow, "creado_en"))
+      .filter((p) => matchesQueryPreventa(p, q));
+  }, [tab, preventas, almacenCotizaciones, query, dateWindow]);
 
-    const { data: det, error: errDet } = await supabase
-      .from("detalle_cotizacion")
-      .select("*")
-      .eq("cotizacion_id", cot.id);
-
-    if (errDet || !det) {
-      setCotizacionLigada(cot);
-      setDetalleCotizacion([]);
-      return;
-    }
-
-    const { data: productos } = await supabase
-      .from("productos")
-      .select("id, nombre, modelo");
-
-    const detalleConProducto = det.map((d) => ({
-      ...d,
-      producto: productos?.find((p) => p.id === d.producto_id) || null,
-    }));
-
-    setCotizacionLigada(cot);
-    setDetalleCotizacion(detalleConProducto);
+  function verDetallesPreventa(preventaId) {
+    navigate(`/admin/preventa/${preventaId}`);
   }
 
-  // === 3. Cargar DETALLES de un ticket
-  async function abrirDetalles(ticket) {
-    setTicketSeleccionado(ticket);
-
-    const { data: h } = await supabase
-      .from("historial_tickets")
-      .select("*")
-      .eq("ticket_id", ticket.id)
-      .order("fecha", { ascending: true });
-
-    setHistorial(h || []);
-
-    const { data: r } = await supabase
-      .from("vendedor_requests")
-      .select("*")
-      .eq("ticket_id", ticket.id)
-      .order("fecha_solicitud", { ascending: true });
-
-    setRequests(r || []);
-
-    // 🔗 Cargar también la cotización ligada (equipos / materiales)
-    await cargarCotizacionYDetalle(ticket.id);
-
-    setTab("detalles");
+  function crearCotizacionDesdePreventa(preventaId) {
+    navigate(`/admin/cotizaciones?nuevo=1&preventa=${preventaId}`);
   }
 
-  // === COMBINAR HISTORIAL + REQUESTS PARA CHAT ===
-  const mensajes = useMemo(() => {
-    const mensajesHistorial =
-      historial?.map((h) => ({
-        id: `h-${h.id}`,
-        fecha: h.fecha,
-        autor: h.rol || "sistema",
-        esvendedor: h.rol === "vendedor",
-        texto: h.descripcion,
-        tipo: "historial",
-      })) || [];
-
-    const mensajesRequests =
-      requests?.map((r) => ({
-        id: `r-${r.id}`,
-        fecha: r.fecha_solicitud,
-        autor: "vendedor",
-        esvendedor: true,
-        texto: r.nota_vendedor,
-        tipo: "request",
-        estadoSolicitado: r.estado_solicitado,
-        estadoRequest: r.estado_request || "pendiente",
-        evidencias: r.evidencias || [],
-        rawRequest: r,
-      })) || [];
-
-    return [...mensajesHistorial, ...mensajesRequests].sort(
-      (a, b) => new Date(a.fecha) - new Date(b.fecha)
-    );
-  }, [historial, requests]);
-
-  // === 4. Aceptar/Denegar solicitud del técnico
-  async function procesarRequest(req, aprobado) {
-    const nuevoEstado = aprobado ? "Aprobado" : "Rechazado";
-
-    await supabase
-      .from("vendedor_requests")
-      .update({ estado_request: nuevoEstado })
-      .eq("id", req.id);
-
-    if (aprobado) {
-      await supabase
-        .from("solicitudes")
-        .update({ estado_solicitud: req.estado_solicitado })
-        .eq("id", req.ticket_id);
-    }
-
-    await supabase.from("historial_tickets").insert([
-      {
-        ticket_id: req.ticket_id,
-        usuario: "admin",
-        rol: "admin",
-        accion: aprobado ? "estado_aprobado" : "estado_rechazado",
-        descripcion: `El administrador ${
-          aprobado ? "aprobó" : "rechazó"
-        } el estado solicitado: ${req.estado_solicitado}`,
-      },
-    ]);
-
-    // refrescar detalle y tablas
-    if (ticketSeleccionado) {
-      await abrirDetalles(ticketSeleccionado);
-    }
-    cargarTodo();
+  function verCotizacion(cotizacionId) {
+    // Ajusta la ruta si en tu router es distinta
+    navigate(`/admin/cotizacion/${cotizacionId}`);
   }
 
-  // === 5. Cierre manual de ticket (opción C) ===
-  async function cerrarTicketManual(ticket) {
-    if (!ticket) return;
-
-    const { value: formValues } = await Swal.fire({
-      title: "Cerrar ticket manualmente",
-      html: `
-        <label style="font-weight:bold;">Estado final:</label>
-        <select id="estado" class="swal2-input" style="width:80%;">
-          <option value="Completado">Completado</option>
-          <option value="Finalizado">Finalizado</option>
-          <option value="Cancelado">Cancelado</option>
-          <option value="Cliente no se encontraba">Cliente no se encontraba</option>
-        </select>
-        <label style="font-weight:bold; margin-top:8px;">Nota (opcional):</label>
-        <textarea id="nota" class="swal2-textarea" style="width:80%;"></textarea>
-      `,
-      focusConfirm: false,
+  async function cambiarEstadoPreventa(preventa, nuevo) {
+    const res = await Swal.fire({
+      icon: "question",
+      title: "Cambiar estado",
+      text: `¿Marcar preventa ${preventa.numero_caso || "#" + preventa.id} como "${nuevo}"?`,
       showCancelButton: true,
-      confirmButtonText: "Cerrar ticket",
-      confirmButtonColor: "#e74c3c",
-      preConfirm: () => {
-        const estado = document.getElementById("estado").value;
-        const nota = document.getElementById("nota").value;
-        if (!estado) {
-          Swal.showValidationMessage("Debes seleccionar un estado final.");
-          return null;
-        }
-        return { estado, nota };
-      },
+      confirmButtonText: "Sí",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#16a34a",
     });
+    if (!res.isConfirmed) return;
 
-    if (!formValues) return;
-
-    const { estado, nota } = formValues;
-
-    const { error } = await supabase
-      .from("solicitudes")
-      .update({ estado_solicitud: estado })
-      .eq("id", ticket.id);
+    const { error } = await supabase.from("preventas").update({ estado: nuevo }).eq("id", preventa.id);
 
     if (error) {
       console.error(error);
-      await Swal.fire({
-        icon: "error",
-        title: "Error al cerrar el ticket",
-        text: "Intenta nuevamente.",
-      });
+      Swal.fire("Error", "No se pudo actualizar el estado.", "error");
       return;
     }
-
-    await supabase.from("historial_tickets").insert([
-      {
-        ticket_id: ticket.id,
-        usuario: "admin",
-        rol: "admin",
-        accion: "cierre_manual",
-        descripcion: `Ticket cerrado manualmente con estado "${estado}". Nota: ${
-          nota || "Sin nota adicional."
-        }`,
-      },
-    ]);
-
-    await Swal.fire({
-      icon: "success",
-      title: "Ticket cerrado",
-      text: `El ticket fue marcado como "${estado}".`,
-    });
-
-    const ticketActualizado = {
-      ...ticket,
-      estado_solicitud: estado,
-      estadoFinal: estado,
-    };
-    setTicketSeleccionado(ticketActualizado);
     cargarTodo();
   }
 
-  // === 6. Asignar técnico desde solicitudes ===
-  const asignarvendedor = async (id, numero_caso, cliente, email, servicio) => {
-    const vendedorsHTML = vendedors
-      .map(
-        (t) => `<option value="${t.email}">${t.nombre} (${t.email})</option>`
-      )
-      .join("");
-
-    const { value: formValues } = await Swal.fire({
-      title: "Asignar técnico y tarea",
-      html: `
-      <label style="font-weight:bold;">Técnico:</label><br/>
-      <select id="vendedor" class="swal2-input" style="width:80%;">
-        ${vendedorsHTML}
-      </select><br/>
-
-      <label style="font-weight:bold;">Fecha agendada:</label>
-      <input type="date" id="fecha" class="swal2-input" style="width:80%;"/><br/>
-
-      <label style="font-weight:bold;">Hora:</label>
-      <input type="time" id="hora" class="swal2-input" style="width:80%;"/><br/>
-
-      <label style="font-weight:bold;">Tipo de tarea:</label>
-      <select id="tipo" class="swal2-input" style="width:80%;">
-        <option value="Levantamiento">Levantamiento</option>
-        <option value="Instalación">Instalación</option>
-        <option value="Mantenimiento">Mantenimiento</option>
-      </select>
-    `,
-      confirmButtonText: "Asignar",
-      showCancelButton: true,
-      preConfirm: () => {
-        return {
-          vendedor: document.getElementById("vendedor").value,
-          fecha: document.getElementById("fecha").value,
-          hora: document.getElementById("hora").value,
-          tarea: document.getElementById("tipo").value,
-        };
-      },
-    });
-
-    if (!formValues) return;
-
-    const { vendedor, fecha, hora, tarea } = formValues;
-
-    // === OBJETO DEL TÉCNICO ===
-    const vendedorObj = vendedors.find((t) => t.email === vendedor);
-    const vendedorAsignado = vendedorObj
-      ? `${vendedorObj.nombre} (${vendedorObj.email})`
-      : vendedor;
-
-    // === 1) ACTUALIZAR BD ===
-    await supabase
-      .from("solicitudes")
-      .update({
-        vendedor_asignado: vendedorAsignado,
-        estado: "Agendado",
-        fecha_agendada: fecha,
-        hora_agendada: hora,
-        tipo_tarea: tarea,
-      })
-      .eq("id", id);
-
-    // === 2) HISTORIAL ===
-    await supabase.from("historial_tickets").insert([
-      {
-        ticket_id: id,
-        usuario: "admin",
-        rol: "admin",
-        accion: "asignacion_vendedor",
-        descripcion: `Se asignó el técnico ${vendedorAsignado} para la tarea "${tarea}" el ${fecha} a las ${hora}.`,
-      },
-    ]);
-
-    // === 3) ENVIAR CORREO ===
-    try {
-      await emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ASIGNACION_ID,
-        {
-          email: email,
-          cliente: cliente,
-          vendedor: vendedorObj?.nombre ?? vendedor,
-          servicio: servicio,
-          fecha: fecha,
-          hora: hora,
-          tarea: tarea,
-          name: "Vega Clean",
-        },
-        EMAILJS_PUBLIC_KEY
-      );
-
-      console.log("Correo enviado correctamente ✔");
-    } catch (err) {
-      console.error("EmailJS error:", err);
-    }
-
-    Swal.fire({
-      icon: "success",
-      title: "Técnico asignado correctamente",
-      text: "El cliente ha sido notificado.",
-    });
-
-    cargarTodo();
-  };
-
-  // =======================
-  // RENDER
-  // =======================
   return (
     <Container>
-      <h2 style={{ color: "#00bcd4", marginBottom: "1.5rem" }}>
-        <ClipboardList size={24} style={{ marginRight: "8px" }} />
-        Gestión de Tickets
-      </h2>
+      <TopBar>
+        <div style={{ minWidth: 260 }}>
+          <h2 style={{ color: "#00bcd4", marginBottom: "0.2rem" }}>Tickets / Preventas</h2>
+          <div style={{ opacity: 0.8, fontSize: 13 }}>
+            Búsqueda por #Caso, cliente, cédula, RNC, email o teléfono. Incluye “Almacén”.
+          </div>
+        </div>
 
-      {/* === TABS === */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <SecondaryBtn onClick={cargarTodo}>
+            <RefreshCw size={16} /> Recargar
+          </SecondaryBtn>
+        </div>
+
+        <FiltersRow>
+          <SearchBox>
+            <Search size={16} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar tickets..." />
+          </SearchBox>
+
+          <Select value={dateWindow} onChange={(e) => setDateWindow(e.target.value)}>
+            <option value="today">Hoy</option>
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="all">Todos</option>
+          </Select>
+        </FiltersRow>
+      </TopBar>
+
       <Tabs>
-        <TabButton
-          $active={tab === "solicitudes"}
-          onClick={() => setTab("solicitudes")}
-        >
-          Solicitudes nuevas
+        <TabButton $active={tab === "enviada"} onClick={() => setTab("enviada")}>
+          Llegaron ahora ({counts.enviada})
         </TabButton>
-        <TabButton
-          $active={tab === "activos"}
-          onClick={() => setTab("activos")}
-        >
-          Tickets activos
+        <TabButton $active={tab === "en_revision"} onClick={() => setTab("en_revision")}>
+          Activas ({counts.en_revision})
         </TabButton>
-        <TabButton
-          $active={tab === "finalizados"}
-          onClick={() => setTab("finalizados")}
-        >
-          Finalizados
+        <TabButton $active={tab === "cotizando"} onClick={() => setTab("cotizando")}>
+          Cotizando ({counts.cotizando})
         </TabButton>
-        <TabButton
-          $active={tab === "cancelados"}
-          onClick={() => setTab("cancelados")}
-        >
-          Cancelados
+        <TabButton $active={tab === "cotizada"} onClick={() => setTab("cotizada")}>
+          Cotizadas ({counts.cotizada})
         </TabButton>
-        <TabButton
-          $active={tab === "detalles"}
-          onClick={() => setTab("detalles")}
-        >
-          Detalles Ticket
+        <TabButton $active={tab === "cerrada"} onClick={() => setTab("cerrada")}>
+          Ventas (Aceptadas) ({counts.cerrada})
+        </TabButton>
+        <TabButton $active={tab === "cancelada"} onClick={() => setTab("cancelada")}>
+          Canceladas ({counts.cancelada})
+        </TabButton>
+
+        {/* ✅ NUEVO TAB: ALMACÉN (cotizaciones en preparación) */}
+        <TabButton $active={tab === "almacen"} onClick={() => setTab("almacen")}>
+          En almacén / Preparación ({counts.almacen})
         </TabButton>
       </Tabs>
 
-      {/* SOLICITUDES NUEVAS */}
-      {tab === "solicitudes" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        {loading ? (
+          <Empty>Cargando...</Empty>
+        ) : listFiltered.length === 0 ? (
+          <Empty>No hay resultados con esos filtros.</Empty>
+        ) : tab === "almacen" ? (
+          /* ==================== TAB ALMACÉN (COTIZACIONES) ==================== */
           <Table>
             <thead>
               <tr>
+                <th>Cotización</th>
                 <th>#Caso</th>
                 <th>Cliente</th>
-                <th>Teléfono</th>
-                <th>Servicio</th>
-                <th>Descripción</th>
-                <th>Fecha</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {solicitudes.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.numero_caso}</td>
-                  <td>{s.cliente}</td>
-                  <td>
-                    <a
-                      href={`https://wa.me/${s.telefono}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#00bcd4",
-                        textDecoration: "none",
-                      }}
-                    >
-                      <Phone size={14} /> {s.telefono}
-                    </a>
-                  </td>
-                  <td>{s.servicio_nombre}</td>
-                  <td style={{ maxWidth: "250px" }}>
-                    <FileText size={14} /> {s.descripcion || "Sin descripción"}
-                  </td>
-                  <td>{new Date(s.fecha).toLocaleDateString()}</td>
-                  <td>
-                    <ActionButton
-                      onClick={() =>
-                        asignarvendedor(
-                          s.id,
-                          s.numero_caso,
-                          s.cliente,
-                          s.email,
-                          s.servicio_nombre
-                        )
-                      }
-                    >
-                      <UserCog size={14} /> Asignar
-                    </ActionButton>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </motion.div>
-      )}
-
-      {/* ACTIVOS */}
-      {tab === "activos" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Table>
-            <thead>
-              <tr>
-                <th>#Caso</th>
-                <th>Cliente</th>
-                <th>Técnico</th>
-                <th>Servicio</th>
-                <th>Tarea</th>
-                <th>Fecha</th>
-                <th>Hora</th>
                 <th>Estado</th>
-                <th>Acción</th>
+                <th>Contacto</th>
+                <th>Fecha envío</th>
+                <th>Acciones</th>
               </tr>
             </thead>
 
             <tbody>
-              {activos.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.numero_caso}</td>
-                  <td>{t.cliente}</td>
-                  <td>{t.vendedor_asignado || "Sin asignar"}</td>
-                  <td>{t.servicio_nombre}</td>
-                  <td>{t.tipo_tarea || "-"}</td>
-                  <td>{t.fecha_agendada || "-"}</td>
-                  <td>{t.hora_agendada || "-"}</td>
-                  <td>{t.estadoFinal}</td>
-                  <td>
-                    <ActionButton onClick={() => abrirDetalles(t)}>
-                      <MessageSquare size={14} /> Ver detalles
-                    </ActionButton>
-                  </td>
-                </tr>
-              ))}
+              {listFiltered.map((c) => {
+                const clienteLabel = labelClienteFromJoin(c);
+                const tipo = c?.cliente_ref?.tipo_cliente || "-";
+                const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || (c?.preventa_id ? `#${c.preventa_id}` : "-");
+
+                return (
+                  <tr key={c.id}>
+                    <td>#{c.id}</td>
+                    <td>{caso || "-"}</td>
+                    <td>
+                      <div style={{ fontWeight: 800 }}>{clienteLabel}</div>
+                      {c?.cliente_ref && (
+                        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                          Tipo: <strong>{tipo}</strong> · Recurrente:{" "}
+                          <strong>{c.cliente_ref.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
+                          <strong>{c.cliente_ref.puede_fiar ? "Sí" : "No"}</strong>
+                        </div>
+                      )}
+                    </td>
+                    <td>{c.estado || "-"}</td>
+                    <td>
+                      <div>{c?.cliente_ref?.email || "-"}</div>
+                      <div>{c?.cliente_ref?.telefono || "-"}</div>
+                    </td>
+                    <td>{c.fecha ? new Date(c.fecha).toLocaleString() : "-"}</td>
+                    <td>
+                      <ActionsCell>
+                        <Btn onClick={() => navigate(`/admin/cotizaciones/${c.id}`)}>
+                          <Eye size={16} /> Ver cotización
+                        </Btn>
+
+                        {c.preventa_id ? (
+                          <SecondaryBtn onClick={() => verDetallesPreventa(c.preventa_id)}>
+                            <Eye size={16} /> Ver ticket
+                          </SecondaryBtn>
+                        ) : null}
+                      </ActionsCell>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
-        </motion.div>
-      )}
-
-      {/* FINALIZADOS */}
-      {tab === "finalizados" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        ) : (
+          /* ==================== TABS PREVENTAS ==================== */
           <Table>
             <thead>
               <tr>
+                <th>ID</th>
                 <th>#Caso</th>
                 <th>Cliente</th>
-                <th>Servicio</th>
+                <th>Tipo</th>
+                <th>Contacto</th>
                 <th>Fecha</th>
-                <th>Estado</th>
-                <th>Acción</th>
+                <th>Acciones</th>
               </tr>
             </thead>
 
             <tbody>
-              {finalizados.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.numero_caso}</td>
-                  <td>{t.cliente}</td>
-                  <td>{t.servicio_nombre}</td>
-                  <td>{t.fecha_agendada || "-"}</td>
-                  <td>{t.estadoFinal}</td>
-                  <td>
-                    <ActionButton onClick={() => abrirDetalles(t)}>
-                      <MessageSquare size={14} /> Ver detalles
-                    </ActionButton>
-                  </td>
-                </tr>
-              ))}
+              {listFiltered.map((p) => {
+                const clienteLabel = labelClienteFromJoin(p);
+                const tipo = p?.cliente_ref?.tipo_cliente || p.tipo_cliente || "-";
+
+                return (
+                  <tr key={p.id}>
+                    <td>{p.id}</td>
+                    <td>{p.numero_caso || "-"}</td>
+                    <td>
+                      <div style={{ fontWeight: 800 }}>{clienteLabel}</div>
+                      {p?.cliente_ref && (
+                        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
+                          Recurrente: <strong>{p.cliente_ref.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
+                          <strong>{p.cliente_ref.puede_fiar ? "Sí" : "No"}</strong>
+                        </div>
+                      )}
+                    </td>
+                    <td>{tipo}</td>
+                    <td>
+                      <div>{p.email || p?.cliente_ref?.email || "-"}</div>
+                      <div>{p.telefono || p?.cliente_ref?.telefono || "-"}</div>
+                    </td>
+                    <td>{p.creado_en ? new Date(p.creado_en).toLocaleString() : "-"}</td>
+                    <td>
+                      <ActionsCell>
+                        <Btn onClick={() => verDetallesPreventa(p.id)}>
+                          <Eye size={16} /> Ver
+                        </Btn>
+
+                        {tab !== "cotizando" && (
+                          <SecondaryBtn onClick={() => cambiarEstadoPreventa(p, "cotizando")}>
+                            Marcar cotizando
+                          </SecondaryBtn>
+                        )}
+
+                        <SecondaryBtn onClick={() => crearCotizacionDesdePreventa(p.id)}>
+                          <FilePlus2 size={16} /> Crear cotización
+                        </SecondaryBtn>
+                      </ActionsCell>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
-        </motion.div>
-      )}
-
-      {/* CANCELADOS */}
-      {tab === "cancelados" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Table>
-            <thead>
-              <tr>
-                <th>#Caso</th>
-                <th>Cliente</th>
-                <th>Servicio</th>
-                <th>Fecha</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {cancelados.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.numero_caso}</td>
-                  <td>{t.cliente}</td>
-                  <td>{t.servicio_nombre}</td>
-                  <td>{t.fecha_agendada || "-"}</td>
-                  <td>{t.estadoFinal}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </motion.div>
-      )}
-
-      {/* DETALLES DEL TICKET (ESTILO CHAT) */}
-      {tab === "detalles" && ticketSeleccionado && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <DetailWrapper>
-            <TicketBox>
-              <TicketHeader>
-                <TicketHeaderLeft>
-                  <TicketTitle>
-                    CASE-{ticketSeleccionado.numero_caso || ticketSeleccionado.id}
-                  </TicketTitle>
-                  <TicketSubTitle>
-                    Cliente: <strong>{ticketSeleccionado.cliente}</strong>
-                  </TicketSubTitle>
-                  <TicketSubTitle>
-                    Servicio:{" "}
-                    <strong>{ticketSeleccionado.servicio_nombre}</strong>
-                  </TicketSubTitle>
-                </TicketHeaderLeft>
-
-                <TicketHeaderRight>
-                  <EstadoBadge
-                    $estado={obtenerEstadoTicket(ticketSeleccionado)}
-                  >
-                    ● {obtenerEstadoTicket(ticketSeleccionado)}
-                  </EstadoBadge>
-
-                  <HeaderActions>
-                    {ticketSeleccionado.telefono && (
-                      <a href={`tel:${ticketSeleccionado.telefono}`}>
-                        <Phone size={14} />
-                        Llamar
-                      </a>
-                    )}
-
-                    {ticketSeleccionado.chat_link && (
-                      <a
-                        href={ticketSeleccionado.chat_link}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <MessageSquare size={14} />
-                        Chat
-                      </a>
-                    )}
-                  </HeaderActions>
-
-                  <button
-                    style={{
-                      marginTop: "10px",
-                      background: "#00bcd4",
-                      color: "white",
-                      border: "none",
-                      padding: "7px 12px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                    }}
-                    onClick={() =>
-                      asignarvendedor(
-                        ticketSeleccionado.id,
-                        ticketSeleccionado.numero_caso,
-                        ticketSeleccionado.cliente,
-                        ticketSeleccionado.email,
-                        ticketSeleccionado.servicio_nombre
-                      )
-                    }
-                  >
-                    🔄 Reasignar técnico
-                  </button>
-                </TicketHeaderRight>
-              </TicketHeader>
-
-              <DetailContent>
-                {/* PANEL IZQUIERDO: INFO */}
-                <InfoPanel>
-                  <SectionTitle>Detalles de la visita</SectionTitle>
-
-                  <InfoRow>
-                    <span>Tipo de tarea:</span>
-                    <span>{ticketSeleccionado.tipo_tarea || "-"}</span>
-                  </InfoRow>
-
-                  <InfoRow>
-                    <span>Fecha agendada:</span>
-                    <span>
-                      {ticketSeleccionado.fecha_agendada
-                        ? new Date(
-                            ticketSeleccionado.fecha_agendada
-                          ).toLocaleDateString()
-                        : "-"}
-                    </span>
-                  </InfoRow>
-
-                  <InfoRow>
-                    <span>Hora agendada:</span>
-                    <span>{ticketSeleccionado.hora_agendada || "-"}</span>
-                  </InfoRow>
-
-                  <InfoRow>
-                    <span>Teléfono:</span>
-                    <span>{ticketSeleccionado.telefono || "-"}</span>
-                  </InfoRow>
-
-                  <InfoRow>
-                    <span>Correo cliente:</span>
-                    <span>{ticketSeleccionado.email || "-"}</span>
-                  </InfoRow>
-
-                  <InfoRow>
-                    <span>Dirección:</span>
-                    <span>{ticketSeleccionado.direccion || "-"}</span>
-                  </InfoRow>
-
-                  <SectionTitle style={{ marginTop: "1.2rem" }}>
-                    Descripción del problema
-                  </SectionTitle>
-                  <p style={{ fontSize: "0.9rem", opacity: 0.85 }}>
-                    {ticketSeleccionado.descripcion ||
-                      "Sin descripción registrada."}
-                  </p>
-
-                  {/* NUEVA SECCIÓN: EQUIPOS Y MATERIALES COTIZADOS */}
-                  <SectionTitle style={{ marginTop: "1.2rem" }}>
-                    Equipos y materiales cotizados
-                  </SectionTitle>
-
-                  {!cotizacionLigada ? (
-                    <p style={{ fontSize: "0.85rem", opacity: 0.75 }}>
-                      No hay una cotización ligada a este ticket todavía.
-                    </p>
-                  ) : (
-                    <>
-                      <p
-                        style={{
-                          fontSize: "0.85rem",
-                          opacity: 0.8,
-                          marginBottom: "0.3rem",
-                        }}
-                      >
-                        Cotización #{cotizacionLigada.id} — Total{" "}
-                        <strong>
-                          RD$
-                          {Number(cotizacionLigada.total || 0).toLocaleString(
-                            "es-DO",
-                            { minimumFractionDigits: 2 }
-                          )}
-                        </strong>
-                      </p>
-
-                      <EquiposTable>
-                        <thead>
-                          <tr>
-                            <th>Equipo / material</th>
-                            <th>Cant.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {detalleCotizacion.length === 0 ? (
-                            <tr>
-                              <td colSpan={2}>
-                                Sin productos registrados en la cotización.
-                              </td>
-                            </tr>
-                          ) : (
-                            detalleCotizacion.map((d) => (
-                              <tr key={d.id}>
-                                <td>
-                                  {d.producto?.nombre || "Producto sin nombre"}
-                                </td>
-                                <td>{d.cantidad}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </EquiposTable>
-                    </>
-                  )}
-
-                  <div style={{ marginTop: "1.4rem" }}>
-                    <CloseTicketButton
-                      onClick={() => cerrarTicketManual(ticketSeleccionado)}
-                    >
-                      <CheckCircle size={14} />
-                      Cerrar ticket manualmente
-                    </CloseTicketButton>
-                  </div>
-                </InfoPanel>
-
-                {/* PANEL DERECHO: CHAT */}
-                <ChatPanel>
-                  <ChatMessages>
-                    {mensajes.length === 0 ? (
-                      <p style={{ fontSize: "0.9rem", opacity: 0.7 }}>
-                        Aún no hay actividad registrada en este ticket.
-                      </p>
-                    ) : (
-                      mensajes.map((m) => (
-                        <ChatBubble key={m.id} $isMine={m.esvendedor}>
-                          <div>{m.texto}</div>
-
-                          {m.tipo === "request" && (
-                            <>
-                              <ChatEstado>
-                                Estado solicitado:{" "}
-                                <strong>{m.estadoSolicitado}</strong>{" "}
-                                ({m.estadoRequest})
-                              </ChatEstado>
-
-                              {Array.isArray(m.evidencias) &&
-                                m.evidencias.map((url, idx) => (
-                                  <EvidenciaImg
-                                    key={idx}
-                                    src={url}
-                                    alt="evidencia"
-                                  />
-                                ))}
-
-                              {m.rawRequest &&
-                                (!m.estadoRequest ||
-                                  m.estadoRequest === "pendiente") && (
-                                  <div
-                                    style={{
-                                      marginTop: "0.5rem",
-                                      display: "flex",
-                                      gap: "0.5rem",
-                                      justifyContent: "flex-end",
-                                    }}
-                                  >
-                                    <ActionButton
-                                      onClick={() =>
-                                        procesarRequest(m.rawRequest, true)
-                                      }
-                                    >
-                                      ✔ Aprobar
-                                    </ActionButton>
-                                    <ActionButton
-                                      onClick={() =>
-                                        procesarRequest(m.rawRequest, false)
-                                      }
-                                    >
-                                      ✖ Rechazar
-                                    </ActionButton>
-                                  </div>
-                                )}
-                            </>
-                          )}
-
-                          <ChatMeta>
-                            {new Date(m.fecha).toLocaleString()} —{" "}
-                            {m.esvendedor ? "Técnico" : m.autor || "Sistema"}
-                          </ChatMeta>
-                        </ChatBubble>
-                      ))
-                    )}
-                  </ChatMessages>
-                </ChatPanel>
-              </DetailContent>
-            </TicketBox>
-          </DetailWrapper>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
     </Container>
   );
 }

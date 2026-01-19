@@ -223,8 +223,9 @@ export default function Usuarios() {
 
         <Label>Rol</Label>
         <Select value={rol} onChange={(e) => setRol(e.target.value)}>
-          <option value="vendedor">Técnico</option>
-          <option value="administrador">Administrador</option>
+          <option value="vendedor">Vendedor</option>
+          <option value="admin">Administrador</option>
+          <option value="almacenista">Almacenista</option>
         </Select>
 
         <Button onClick={handleCrearEmpleado}>

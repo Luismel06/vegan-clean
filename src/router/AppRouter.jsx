@@ -22,13 +22,14 @@ import Tickets from "../pages/admin/Tickets";
 import Productos from "../pages/admin/Productos";
 //import ServiciosAdmin from "../pages/admin/Servicios";---> ya no se usara (lo dejo comentado por si acaso)
 import Equipos from "../pages/admin/Equipos";
+import PreventaDetalle from "../pages/admin/PreventaDetalle";
 import PublicacionesAdmin from "../pages/admin/Publicaciones";
 import Cotizaciones from "../pages/admin/Cotizaciones";
 import VistaCotizacion from "../pages/admin/VistaCotizacion";
 
 // --- Páginas técnico ---
-import TicketsVendedor from "../pages/vendedor/TicketsVendedor";
-import CalendarioVendedor from "../pages/vendedor/CalendarioVendedor";
+import VendedorCatalogo from "../pages/vendedor/VendedorCatalogo";
+import VendedorHistorial from "../pages/vendedor/VendedorHistorial";
 import TicketVendedorDetalle from "../pages/vendedor/TicketVendedorDetalle";
 import DashboardVendedor from "../pages/vendedor/DashboardVendedor";
 
@@ -98,6 +99,7 @@ const router = createBrowserRouter([
       { path: "/admin/productos", element: <Productos /> },
       //{ path: "/admin/servicios", element: <ServiciosAdmin /> },
       { path: "/admin/equipos", element: <Equipos /> },
+      { path: "/admin/preventa/:id", element: <PreventaDetalle /> },
       { path: "/admin/publicaciones", element: <PublicacionesAdmin /> },
       { path: "/admin/cotizaciones", element: <Cotizaciones /> },
       { path: "/admin/cotizaciones/:id", element: <VistaCotizacion /> },
@@ -114,9 +116,9 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/vendedor/dashboard", element: <DashboardVendedor /> },
-     { path: "/vendedor/tickets", element: <TicketsVendedor /> },
-    { path: "/vendedor/tickets/:id", element: <TicketVendedorDetalle /> },
-    { path: "/vendedor/calendario", element: <CalendarioVendedor /> },
+     { path: "/vendedor/catalogo", element: <VendedorCatalogo /> },
+    { path: "/vendedor/catalogo/:id", element: <TicketVendedorDetalle /> },
+    { path: "/vendedor/historial", element: <VendedorHistorial /> },
     ],
   },
 

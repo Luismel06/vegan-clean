@@ -284,12 +284,12 @@ export function VendedorLayout() {
               <Home size={18} /> Dashboard
             </MenuItem>
 
-            <MenuItem onClick={() => { navigate("/vendedor/tickets"); setSidebarOpen(false); }}>
-              <ClipboardList size={18} /> Tickets
+            <MenuItem onClick={() => { navigate("/vendedor/catalogo"); setSidebarOpen(false); }}>
+              <ClipboardList size={18} />Catalogo
             </MenuItem>
 
-            <MenuItem onClick={() => { navigate("/vendedor/calendario"); setSidebarOpen(false); }}>
-              <Calendar size={18} /> Calendario
+            <MenuItem onClick={() => { navigate("/vendedor/historial"); setSidebarOpen(false); }}>
+              <Calendar size={18} /> Historial
             </MenuItem>
           </MenuContainer>
 

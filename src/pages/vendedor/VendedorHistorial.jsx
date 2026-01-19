@@ -1,65 +1,44 @@
-// src/pages/vendedor/VendedorDashboard.jsx
+// src/pages/vendedor/VendedorHistorial.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { useNavigate } from "react-router-dom";
 
 const Wrap = styled.section`
   padding: 1.6rem 2rem;
   color: ${({ theme }) => theme.text};
 `;
 
-const Top = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 12px;
-  flex-wrap: wrap;
-`;
-
 const Title = styled.h2`
   margin: 0;
 `;
 
-const Cards = styled.div`
-  margin-top: 1rem;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
-  gap: 12px;
-
-  @media (max-width: 1100px) {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
-  }
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
 const Card = styled.div`
-  background: ${({ theme }) => theme.cardBackground};
-  border: 1px solid ${({ theme }) => theme.border};
-  border-radius: 14px;
-  padding: 1rem;
-`;
-
-const Big = styled.div`
-  font-size: 1.6rem;
-  font-weight: 900;
-  margin-top: 6px;
-`;
-
-const Sub = styled.div`
-  opacity: 0.8;
-  font-size: 0.9rem;
-`;
-
-const TableWrap = styled.div`
   margin-top: 1rem;
   background: ${({ theme }) => theme.cardBackground};
   border: 1px solid ${({ theme }) => theme.border};
   border-radius: 14px;
   overflow: hidden;
+`;
+
+const Head = styled.div`
+  padding: 0.9rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-weight: 900;
+`;
+
+const Btn = styled.button`
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  font-weight: 900;
+  cursor: pointer;
+  background: ${({ theme }) => theme.accent};
+  color: #000;
 `;
 
 const Table = styled.table`
@@ -78,35 +57,30 @@ const Table = styled.table`
   }
 `;
 
-const Btn = styled.button`
-  border: none;
-  border-radius: 10px;
-  padding: 0.6rem 0.9rem;
-  font-weight: 900;
-  cursor: pointer;
-  background: ${({ theme }) => theme.accent};
-  color: #000;
-`;
-
 function formatRD(v) {
   const n = Number(v || 0);
   return `RD$ ${n.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function safeText(v) {
+  return String(v ?? "").trim();
+}
+
 async function getVendedorId() {
+  // Preferido: Supabase Auth
   const { data, error } = await supabase.auth.getUser();
   if (!error && data?.user?.id) return data.user.id;
 
+  // Fallback si guardas algo en localStorage
   const ls = localStorage.getItem("user_id");
   return ls || null;
 }
 
-export default function VendedorDashboard() {
-  const nav = useNavigate();
+export default function VendedorHistorial() {
   const [loading, setLoading] = useState(true);
-
   const [preventas, setPreventas] = useState([]);
   const [cotizaciones, setCotizaciones] = useState([]);
+
   const [vendedorId, setVendedorId] = useState(null);
 
   useEffect(() => {
@@ -127,18 +101,18 @@ export default function VendedorDashboard() {
         return;
       }
 
-      // Preventas SOLO del vendedor
+      // 1) Preventas SOLO del vendedor
       const { data: prev, error: e1 } = await supabase
         .from("preventas")
-        .select("id, numero_caso, estado, creado_en, cliente_id, cliente, tipo_cliente, cedula, empresa_rnc, vendedor_id")
+        .select("id, numero_caso, estado, creado_en, cliente, cliente_id, vendedor_id")
         .eq("vendedor_id", vid)
         .order("creado_en", { ascending: false })
-        .limit(10);
+        .limit(30);
 
       if (e1) throw e1;
 
-      // Cotizaciones SOLO del vendedor (elige método)
-      const hasCotVendedorId = true; // <<< pon false si NO tienes cotizaciones.vendedor_id
+      // 2) Cotizaciones SOLO del vendedor:
+      const hasCotVendedorId = true;
 
       let cot = [];
 
@@ -148,7 +122,7 @@ export default function VendedorDashboard() {
           .select("id, estado, fecha, total, preventa_id, cliente_id, numero_caso, vendedor_id")
           .eq("vendedor_id", vid)
           .order("fecha", { ascending: false })
-          .limit(10);
+          .limit(30);
 
         if (e2) throw e2;
         cot = cotData || [];
@@ -160,7 +134,7 @@ export default function VendedorDashboard() {
             .select("id, estado, fecha, total, preventa_id, cliente_id, numero_caso")
             .in("preventa_id", ids)
             .order("fecha", { ascending: false })
-            .limit(10);
+            .limit(30);
 
           if (e2) throw e2;
           cot = cotData || [];
@@ -173,57 +147,49 @@ export default function VendedorDashboard() {
       setCotizaciones(cot || []);
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No se pudo cargar el dashboard del vendedor.", "error");
+      Swal.fire("Error", "No se pudo cargar el historial.", "error");
     } finally {
       setLoading(false);
     }
   }
 
-  const metrics = useMemo(() => {
-    const today0 = new Date();
-    today0.setHours(0, 0, 0, 0);
-
-    const prevHoy = (preventas || []).filter((p) => p.creado_en && new Date(p.creado_en) >= today0).length;
-    const cotHoy = (cotizaciones || []).filter((c) => c.fecha && new Date(c.fecha) >= today0).length;
-
-    const cotPend = (cotizaciones || []).filter((c) => (c.estado || "") === "pendiente").length;
-    const cotPrep = (cotizaciones || []).filter((c) => (c.estado || "") === "preparacion").length;
-
-    const totalUltimas = (cotizaciones || []).reduce((acc, c) => acc + Number(c.total || 0), 0);
-
-    return { prevHoy, cotHoy, cotPend, cotPrep, totalUltimas };
+  const resumen = useMemo(() => {
+    const p = preventas || [];
+    const c = cotizaciones || [];
+    const total30 = c.reduce((acc, x) => acc + Number(x.total || 0), 0);
+    return {
+      prevCount: p.length,
+      cotCount: c.length,
+      total30,
+    };
   }, [preventas, cotizaciones]);
 
   return (
     <Wrap>
-      <Top>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <Title>Dashboard vendedor</Title>
-          <Sub>
-            Resumen rápido (solo tus registros).
+          <Title>Historial vendedor</Title>
+          <div style={{ opacity: 0.8, fontSize: 13 }}>
+            Solo tus preventas y cotizaciones recientes.
             {vendedorId ? (
               <span style={{ marginLeft: 8, opacity: 0.8 }}>
-                vendedor_id: <strong>{String(vendedorId).slice(0, 8)}…</strong>
+                (vendedor_id: <strong>{safeText(vendedorId).slice(0, 8)}…</strong>)
               </span>
             ) : null}
-          </Sub>
+          </div>
+
+          {!loading ? (
+            <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
+              Preventas: <strong>{resumen.prevCount}</strong>
+            </div>
+          ) : null}
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Btn onClick={() => nav("/vendedor/catalogo")}>Ir al catálogo</Btn>
-          <Btn onClick={cargar}>Recargar</Btn>
-        </div>
-      </Top>
+        <Btn onClick={cargar}>Recargar</Btn>
+      </div>
 
-      <Cards>
-        <Card>
-          <Sub>Preventas de hoy</Sub>
-          <Big>{loading ? "..." : metrics.prevHoy}</Big>
-        </Card>
-      </Cards>
-
-      <TableWrap>
-        <div style={{ padding: "0.9rem 1rem", fontWeight: 900 }}>Últimas preventas</div>
+      <Card>
+        <Head>Preventas recientes</Head>
         <Table>
           <thead>
             <tr>
@@ -242,10 +208,14 @@ export default function VendedorDashboard() {
                 <td>{p.id}</td>
               </tr>
             ))}
-            {!loading && (preventas || []).length === 0 && <tr><td colSpan={4}>Sin datos.</td></tr>}
+            {!loading && (preventas || []).length === 0 && (
+              <tr>
+                <td colSpan={4}>Sin datos.</td>
+              </tr>
+            )}
           </tbody>
         </Table>
-      </TableWrap>
+      </Card>
     </Wrap>
   );
 }

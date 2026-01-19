@@ -153,7 +153,7 @@ export default function LoginAdmin() {
         if (["admin", "administrador"].includes(usuario.rol)) {
   navigate("/admin", { replace: true });
 } else if (["vendedor", "Vendedor"].includes(usuario.rol)) {
-  navigate("/vendedor/tickets", { replace: true });
+  navigate("/vendedor/catalogo", { replace: true });
 } else {
   Swal.fire({
     icon: "warning",

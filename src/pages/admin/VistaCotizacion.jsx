@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// src/pages/admin/VistaCotizacion.jsx
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
 import jsPDF from "jspdf";
@@ -41,6 +42,7 @@ const InfoRow = styled.div`
   margin: 0.4rem 0;
   display: flex;
   justify-content: space-between;
+  gap: 14px;
   font-size: 1rem;
 `;
 
@@ -54,6 +56,7 @@ const Table = styled.table`
     padding: 0.8rem;
     border-bottom: 1px solid ${({ theme }) => theme.border};
     text-align: left;
+    vertical-align: top;
   }
 
   th {
@@ -88,7 +91,7 @@ const Button = styled.button`
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   width: 100%;
 
   display: flex;
@@ -100,8 +103,15 @@ const Button = styled.button`
     opacity: 0.9;
     transform: scale(1.02);
   }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
 `;
 
+// ✅ Fix warning styled-components: usar transient prop $estado
 const EstadoBadge = styled.span`
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
@@ -111,28 +121,32 @@ const EstadoBadge = styled.span`
   align-items: center;
   gap: 0.3rem;
 
-  background-color: ${({ estado }) =>
-    estado === "aceptada"
+  background-color: ${({ $estado }) =>
+    $estado === "aceptada"
       ? "rgba(46, 204, 113, 0.18)"
-      : estado === "rechazada"
+      : $estado === "preparacion"
+      ? "rgba(52, 152, 219, 0.15)"
+      : $estado === "rechazada"
       ? "rgba(231, 76, 60, 0.15)"
       : "rgba(241, 196, 15, 0.18)"};
 
-  color: ${({ estado }) =>
-    estado === "aceptada"
+  color: ${({ $estado }) =>
+    $estado === "aceptada"
       ? "#27ae60"
-      : estado === "rechazada"
+      : $estado === "preparacion"
+      ? "#2980b9"
+      : $estado === "rechazada"
       ? "#c0392b"
       : "#b7950b"};
 `;
 
-// 🔹 Datos de la empresa para el PDF
+// Empresa (cabecera fija)
 const EMPRESA = {
   nombre: "Vega Clean",
-  rnc: "RNC: 1-00-00000-0", // cambia esto por tu RNC real
-  direccion: "Santo Domingo, República Dominicana",
-  telefono: "+1 (829) 723-6011",
-  email: "oriseservice394@gmail.com",
+  rnc: "RNC: 1-00-00000-0",
+  direccion: "La Vega, República Dominicana",
+  telefono: "+1 (809) 365-6666",
+  email: "emailcambiarlo@gmail.com",
 };
 
 function formatearEstado(estado) {
@@ -140,20 +154,6 @@ function formatearEstado(estado) {
   return estado.charAt(0).toUpperCase() + estado.slice(1);
 }
 
-export default function VistaCotizacion() {
-  const { id } = useParams();
-  const [cotizacion, setCotizacion] = useState(null);
-  const [detalle, setDetalle] = useState([]);
-  const [solicitud, setSolicitud] = useState(null); // 🔗 ticket / solicitud
-
-  // 🔧 Para edición
-  const [editMode, setEditMode] = useState(false);
-  const [productos, setProductos] = useState([]);
-  const [editDetalle, setEditDetalle] = useState([]);
-  const [editNombreServicio, setEditNombreServicio] = useState("");
-  const [editPrecioServicio, setEditPrecioServicio] = useState(0);
-  const [editDescuento, setEditDescuento] = useState(0);
-  // Formato moneda RD$ con separador de miles
 function formatRD(value) {
   const num = Number(value || 0);
   return `RD$ ${num.toLocaleString("es-DO", {
@@ -162,811 +162,709 @@ function formatRD(value) {
   })}`;
 }
 
-  useEffect(() => {
-    fetchCotizacion();
-  }, []);
+function textoSeguro(v) {
+  return String(v ?? "-");
+}
 
-  async function fetchCotizacion() {
-    const { data: cot } = await supabase
-      .from("cotizaciones")
-      .select("*")
-      .eq("id", id)
-      .single();
+function labelCliente(cli) {
+  if (!cli) return "-";
+  const tipo = cli.tipo_cliente || "";
+  if (tipo === "empresa") {
+    return `${cli.nombre || "-"} (RNC: ${cli.empresa_rnc || "-"})`;
+  }
+  return `${cli.nombre || "-"} (Cédula: ${cli.cedula || "-"})`;
+}
 
-    setCotizacion(cot || null);
-
-    // Detalle de productos
-    const { data: det } = await supabase
-      .from("detalle_cotizacion")
-      .select("*")
-      .eq("cotizacion_id", id);
-
-    const { data: productosData } = await supabase
-      .from("productos")
-      .select("id, nombre, precio");
-
-    const detalleConProducto = det?.map((d) => {
-      const prod = productosData?.find((p) => p.id === d.producto_id);
-      return { ...d, producto: prod };
-    });
-
-    setDetalle(detalleConProducto || []);
-    setProductos(productosData || []);
-
-    // Inicializar campos de edición
-    if (cot) {
-      setEditNombreServicio(cot.nombre_servicio || "");
-      setEditPrecioServicio(Number(cot.precio_servicio || 0));
-      setEditDescuento(Number(cot.descuento || 0));
+// ========= LOGO robusto (convierte a PNG con canvas para evitar "wrong PNG signature") =========
+function blobToPngDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    try {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          URL.revokeObjectURL(url);
+          resolve(dataUrl);
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          reject(e);
+        }
+      };
+      img.onerror = (e) => {
+        URL.revokeObjectURL(url);
+        reject(e);
+      };
+      img.src = url;
+    } catch (e) {
+      reject(e);
     }
+  });
+}
 
-    const editDet = (detalleConProducto || []).map((d) => ({
-      producto_id: d.producto_id,
-      cantidad: Number(d.cantidad || 0),
-    }));
-    setEditDetalle(editDet);
+async function cargarLogoRobustoPng() {
+  const candidates = [
+    "/logo_veganclean.png",
+    "/logo-veganclean.png",
+    "/logo-vega-clean.png",
+    "/logo-vega-clean.jpg",
+    "/logo-vega-clean.jpeg",
+    "/logo.webp",
+    "/logo.png",
+    "/logo.jpg",
+    "/logo.jpeg",
+  ];
 
-    // 🔗 Si la cotización tiene solicitud_id, cargamos la solicitud
-    if (cot?.solicitud_id) {
-      const { data: sol } = await supabase
-        .from("solicitudes")
-        .select("*")
-        .eq("id", cot.solicitud_id)
-        .single();
+  for (const path of candidates) {
+    try {
+      const resp = await fetch(path, { cache: "no-store" });
+      if (!resp.ok) continue;
 
-      setSolicitud(sol || null);
-    } else {
-      setSolicitud(null);
+      const ct = (resp.headers.get("content-type") || "").toLowerCase();
+      if (ct.includes("text/html")) continue;
+
+      const blob = await resp.blob();
+      if (!blob || blob.size < 50) continue;
+
+      const dataUrl = await blobToPngDataUrl(blob);
+      return { dataUrl, fmt: "PNG" };
+    } catch {
+      continue;
     }
   }
+  return null;
+}
 
-  // -------- TOTALES (con ITBIS 18%) ----------
-  const subtotalProductos = detalle.reduce(
-    (acc, d) => acc + Number(d.subtotal || 0),
-    0
-  );
-  const servicioNum = cotizacion ? Number(cotizacion.precio_servicio || 0) : 0;
-  const base = subtotalProductos + servicioNum;
-  const itebis = base * 0.18;
-  const descuentoPct = cotizacion ? Number(cotizacion.descuento || 0) : 0;
-  const descuentoMonto = (base * descuentoPct) / 100;
-  const total = base + itebis - descuentoMonto;
+export default function VistaCotizacion() {
+  const { id } = useParams();
 
-  // Estos solo se usan en el PDF de plan 50/50
-  const inicial50 = total * 0.5;
-  const restante50 = total - inicial50;
-  // -------------------------------------------
+  const [cotizacion, setCotizacion] = useState(null);
+  const [clienteRef, setClienteRef] = useState(null); // clientes join
+  const [detalle, setDetalle] = useState([]); // con nombre resuelto vía join
+  const [preventa, setPreventa] = useState(null);
 
-  // -------------- CAMBIO DE ESTADO + STOCK -----------------
-  async function cambiarEstado(nuevoEstado) {
-    if (!cotizacion) return;
+  const [editMode, setEditMode] = useState(false);
+  const [editDetalle, setEditDetalle] = useState([]);
+  const [editDescuento, setEditDescuento] = useState(0);
 
-    if (nuevoEstado === cotizacion.estado) {
-      Swal.fire("Sin cambios", "La cotización ya tiene ese estado.", "info");
+  // permiso edición por rol (si te interesa bloquear en vendedor)
+  const role = localStorage.getItem("rol") || ""; // "admin" | "vendedor"
+  const isVendedor = role === "vendedor";
+  const allowEdit = !isVendedor;
+
+  useEffect(() => {
+    fetchTodo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function fetchTodo() {
+    await fetchCotizacionYDetalle();
+  }
+
+  async function fetchCotizacionYDetalle() {
+    // 1) cotización con join a clientes
+    const { data: cot, error: errCot } = await supabase
+      .from("cotizaciones")
+      .select(
+        `
+        *,
+        cliente_ref:clientes (
+          id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar
+        )
+      `
+      )
+      .eq("id", Number(id))
+      .single();
+
+    if (errCot) {
+      console.error(errCot);
+      Swal.fire("Error", "No se pudo cargar la cotización.", "error");
       return;
     }
 
-    if (nuevoEstado === "aceptada") {
-      if (cotizacion.estado === "aceptada") {
-        Swal.fire(
-          "Ya aceptada",
-          "Esta cotización ya fue aceptada anteriormente. El inventario ya se descontó.",
-          "info"
-        );
-        return;
+    setCotizacion(cot || null);
+    setClienteRef(cot?.cliente_ref || null);
+
+    // 2) preventa (si existe)
+    if (cot?.preventa_id) {
+      const { data: p, error: errPrev } = await supabase
+        .from("preventas")
+        .select("*")
+        .eq("id", Number(cot.preventa_id))
+        .maybeSingle();
+      if (errPrev) console.error(errPrev);
+      setPreventa(p || null);
+    } else {
+      setPreventa(null);
+    }
+
+    // 3) detalle con join a productos/equipos (para nombre)
+    const { data: det, error: errDet } = await supabase
+      .from("detalle_cotizacion")
+      .select(
+        `
+        id, cotizacion_id, producto_id, equipo_id, cantidad, subtotal, precio_base_snapshot, extra_unitario, precio_unitario, cantidad_despachada,
+        producto:productos ( id, nombre, precio, modelo, marca, categoria ),
+        equipo:equipos ( id, nombre, precio, modelo, marca, categoria )
+      `
+      )
+      .eq("cotizacion_id", Number(id))
+      .order("id", { ascending: true });
+
+    if (errDet) {
+      console.error(errDet);
+      setDetalle([]);
+      return;
+    }
+
+    const detalleConNombre = (det || []).map((d) => {
+      if (d.producto_id != null) {
+        return {
+          ...d,
+          tipo: "producto",
+          nombre: d.producto?.nombre || `Producto #${d.producto_id}`,
+          modelo: d.producto?.modelo || "",
+          item: d.producto || null,
+        };
       }
+      if (d.equipo_id != null) {
+        return {
+          ...d,
+          tipo: "equipo",
+          nombre: d.equipo?.nombre || `Equipo #${d.equipo_id}`,
+          modelo: d.equipo?.modelo || "",
+          item: d.equipo || null,
+        };
+      }
+      return { ...d, tipo: "desconocido", nombre: "Item", item: null };
+    });
 
-      const faltantes = [];
+    setDetalle(detalleConNombre);
 
-      for (const item of detalle) {
-        if (!item.producto_id) continue;
+    // Edit init
+    setEditDescuento(Number(cot?.descuento || 0));
+    setEditDetalle(
+      detalleConNombre.map((d) => ({
+        tipo: d.producto_id != null ? "producto" : "equipo",
+        item_id: d.producto_id != null ? d.producto_id : d.equipo_id,
+        cantidad: Number(d.cantidad || 1),
+        extra_unitario: Number(d.extra_unitario || 0),
+      }))
+    );
+  }
 
-        const { data: prod, error } = await supabase
-          .from("productos")
-          .select("id, nombre, cantidad")
-          .eq("id", item.producto_id)
-          .single();
+  // -------- TOTALES ----------
+  const subtotal = useMemo(
+    () => detalle.reduce((acc, d) => acc + Number(d.subtotal || 0), 0),
+    [detalle]
+  );
+  const descuentoPct = Number(cotizacion?.descuento || 0);
+  const descuentoMonto = (subtotal * descuentoPct) / 100;
+  const itbis = (subtotal - descuentoMonto) * 0.18;
+  const total = subtotal - descuentoMonto + itbis;
+
+  // ------------- ESTADO -------------
+  async function cambiarEstado(nuevoEstado) {
+    if (!cotizacion) return;
+
+    try {
+      // ✅ Enviar a almacén: NO descuenta inventario, solo pasa a "preparacion"
+      if (nuevoEstado === "aceptada") {
+        const { error } = await supabase
+          .from("cotizaciones")
+          .update({ estado: "preparacion", inventario_descontado: false })
+          .eq("id", Number(id));
 
         if (error) {
           console.error(error);
-          Swal.fire(
-            "Error",
-            "No se pudo validar el inventario de los productos.",
-            "error"
-          );
+          Swal.fire("Error", error.message || "No se pudo pasar a preparación de almacén.", "error");
           return;
         }
 
-        const disponible = Number(prod?.cantidad || 0);
-        const requerida = Number(item.cantidad || 0);
-
-        if (requerida > disponible) {
-          faltantes.push({
-            nombre: prod.nombre,
-            disponible,
-            requerida,
-          });
-        }
-      }
-
-      if (faltantes.length > 0) {
-        const msg = faltantes
-          .map(
-            (f) =>
-              `${f.nombre}: requiere ${f.requerida} y solo hay ${f.disponible}`
-          )
-          .join("\n");
-
-        Swal.fire(
-          "Stock insuficiente",
-          `No hay inventario suficiente para los siguientes productos:\n\n${msg}`,
-          "warning"
-        );
+        Swal.fire("Preparación", "Enviada a almacén para despacho.", "success");
+        await fetchCotizacionYDetalle(); // ✅ aquí estaba tu bug (llamabas fetchCotizacion)
         return;
       }
 
-      for (const item of detalle) {
-        if (!item.producto_id) continue;
+      const { error } = await supabase
+        .from("cotizaciones")
+        .update({ estado: nuevoEstado })
+        .eq("id", Number(id));
 
-        const { data: prod } = await supabase
-          .from("productos")
-          .select("cantidad")
-          .eq("id", item.producto_id)
-          .single();
-
-        const disponible = Number(prod?.cantidad || 0);
-        const requerida = Number(item.cantidad || 0);
-        const nuevaCantidad = disponible - requerida;
-
-        await supabase
-          .from("productos")
-          .update({ cantidad: nuevaCantidad })
-          .eq("id", item.producto_id);
+      if (error) {
+        console.error(error);
+        Swal.fire("Error", error.message || "No se pudo cambiar el estado", "error");
+        return;
       }
+
+      Swal.fire("Estado actualizado", "", "success");
+      await fetchCotizacionYDetalle();
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "Ocurrió un error inesperado cambiando el estado.", "error");
     }
-
-    const { error } = await supabase
-      .from("cotizaciones")
-      .update({ estado: nuevoEstado })
-      .eq("id", id);
-
-    if (error) {
-      console.error(error);
-      return Swal.fire("Error", "No se pudo cambiar el estado", "error");
-    }
-
-    Swal.fire("Estado actualizado", "", "success");
-    fetchCotizacion();
   }
-  // --------------------------------------------------
 
-  if (!cotizacion) return <p style={{ padding: "2rem" }}>Cargando...</p>;
+  // -------- PDF ----------
+  function padOrder(n, size = 5) {
+    const s = String(n ?? "");
+    return s.padStart(size, "0");
+  }
 
-  async function cargarLogo() {
-    try {
-      const resp = await fetch("/logo-vega-clean.jpg");
-      const blob = await resp.blob();
-      return await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
+  function getClienteNombreYDoc() {
+    // prioridad: cliente_ref
+    const cli = clienteRef;
+    if (cli) {
+      const tipo = cli.tipo_cliente;
+      const doc = tipo === "empresa" ? cli.empresa_rnc : cli.cedula;
+      return { nombre: cli.nombre, doc: doc, tipo: tipo };
+    }
+
+    // fallback por preventa
+    if (preventa) {
+      const tipo = preventa.tipo_cliente;
+      const doc = tipo === "empresa" ? preventa.empresa_rnc : preventa.cedula;
+      return { nombre: preventa.cliente || cotizacion?.cliente, doc, tipo };
+    }
+
+    // último fallback
+    return { nombre: cotizacion?.cliente || "-", doc: "-", tipo: "" };
+  }
+
+  function construirPDF(logoObj, tipoDoc = "cotizacion") {
+    const doc = new jsPDF({ unit: "pt", format: "letter" });
+
+    const dark = "#111111";
+    const gray = "#444444";
+    const lineGray = "#BDBDBD";
+    const headerFill = "#F3F3F3";
+
+    const marginX = 48;
+    const pageW = doc.internal.pageSize.getWidth();
+    const usableW = pageW - marginX * 2;
+
+    let y = 48;
+
+    const { nombre: cliNombre, doc: cliDoc } = getClienteNombreYDoc();
+
+    // ======= ORDEN DE COMPRA (FORMATO EMPRESA) =======
+    if (tipoDoc === "orden") {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(24);
+      doc.setTextColor(dark);
+      doc.text("Orden de Compra", marginX, y + 12);
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(gray);
+
+      const fechaTxt = `Fecha: ${new Date().toLocaleDateString("es-DO")}`;
+      const ordenTxt = `N° de orden: ${padOrder(cotizacion?.id, 5)}`;
+
+      doc.text(fechaTxt, marginX + usableW, y + 4, { align: "right" });
+      doc.text(ordenTxt, marginX + usableW, y + 18, { align: "right" });
+
+      y += 44;
+
+      if (logoObj?.dataUrl && logoObj?.fmt) {
+        try {
+          doc.addImage(logoObj.dataUrl, logoObj.fmt, marginX, y, 44, 44);
+        } catch {}
+      }
+
+      const boxTop = y + 6;
+      const boxH = 92;
+      const gap = 28;
+      const colW = (usableW - gap) / 2;
+
+      const leftX = marginX;
+      const rightX = marginX + colW + gap;
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(dark);
+      doc.text("Datos del proveedor", leftX, boxTop + 10);
+      doc.text("Datos del cliente", rightX, boxTop + 10);
+
+      const provLines = [
+        `Nombre o razón social: ${textoSeguro(EMPRESA.nombre)}`,
+        `${textoSeguro(EMPRESA.rnc)}`,
+        `Dirección: ${textoSeguro(EMPRESA.direccion)}`,
+        `Teléfono: ${textoSeguro(EMPRESA.telefono)}`,
+        `Correo electrónico: ${textoSeguro(EMPRESA.email)}`,
+      ];
+
+      const cliTelefono = preventa?.telefono || clienteRef?.telefono || "-";
+      const cliEmail = preventa?.email || clienteRef?.email || "-";
+      const cliDireccion = preventa?.direccion || clienteRef?.direccion || "-";
+
+      const cliLines = [
+        `Nombre o razón social: ${textoSeguro(cliNombre)}`,
+        `RNC / ID -: ${textoSeguro(cliDoc)}`,
+        `Dirección: ${textoSeguro(cliDireccion)}`,
+        `Teléfono: ${textoSeguro(cliTelefono)}`,
+        `Correo electrónico: ${textoSeguro(cliEmail)}`,
+      ];
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(gray);
+
+      let ly = boxTop + 26;
+      for (const l of provLines) {
+        doc.text(l, leftX, ly);
+        ly += 14;
+      }
+
+      let ry = boxTop + 26;
+      for (const l of cliLines) {
+        doc.text(l, rightX, ry);
+        ry += 14;
+      }
+
+      y = boxTop + boxH + 18;
+
+      const body = detalle.map((d) => {
+        const cant = Number(d.cantidad || 0);
+        const sub = Number(d.subtotal || 0);
+        const unit = cant > 0 ? sub / cant : 0;
+        const ref =
+          d.producto_id != null
+            ? `P-${d.producto_id}`
+            : d.equipo_id != null
+            ? `E-${d.equipo_id}`
+            : "-";
+
+        return [ref, textoSeguro(d.nombre), String(cant), formatRD(unit), formatRD(sub)];
       });
-    } catch (err) {
-      console.error("No se pudo cargar el logo:", err);
-      return null;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Ref.", "Descripción", "Cantidad", "Precio unitario", "Precio total"]],
+        body,
+        theme: "plain",
+        styles: { fontSize: 10, cellPadding: 8, textColor: 20 },
+        headStyles: { fillColor: headerFill, textColor: 20, fontStyle: "bold" },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { cellWidth: 230 },
+          2: { cellWidth: 70, halign: "center" },
+          3: { cellWidth: 90, halign: "right" },
+          4: { cellWidth: 90, halign: "right" },
+        },
+      });
+
+      const tableEndY = doc.lastAutoTable.finalY;
+
+      let totalsY = tableEndY + 22;
+      const rightEdge = marginX + usableW;
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(dark);
+
+      doc.text("Total pedido", rightEdge - 160, totalsY);
+      doc.text(formatRD(subtotal - descuentoMonto + itbis), rightEdge, totalsY, { align: "right" });
+
+      totalsY += 18;
+      doc.text("Total a pagar", rightEdge - 160, totalsY);
+      doc.text(formatRD(total), rightEdge, totalsY, { align: "right" });
+
+      let linesY = totalsY + 48;
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(dark);
+
+      doc.text("Fecha de entrega:", marginX, linesY);
+      doc.setDrawColor(lineGray);
+      doc.line(marginX + 95, linesY + 2, marginX + 280, linesY + 2);
+
+      linesY += 18;
+      doc.text("Dirección de entrega:", marginX, linesY);
+      doc.line(marginX + 115, linesY + 2, marginX + 320, linesY + 2);
+
+      linesY += 18;
+      doc.text("Notas:", marginX, linesY);
+      doc.line(marginX + 40, linesY + 2, marginX + 320, linesY + 2);
+
+      const sigY = 720;
+      doc.line(rightEdge - 220, sigY, rightEdge, sigY);
+      doc.setFontSize(10);
+      doc.setTextColor(gray);
+      doc.text("Firma del receptor", rightEdge - 110, sigY + 14, { align: "center" });
+
+      return doc;
     }
-  }
 
-  // =================== PDF GENERAL (COTIZ / FACTURA / PLAN 50) ===================
-  function construirPDF(logoDataUrl, tipoDoc = "cotizacion") {
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
+    // ======= COTIZACIÓN / FACTURA (layout) =======
+    const primary = "#16a34a";
+    const lightGray = "#F5F5F5";
+    const marginY = 50;
 
-  const primary = "#0FA3B1";
-  const dark = "#333333";
-  const gray = "#555555";
-  const lightGray = "#F5F5F5";
+    y = marginY;
 
-  const marginX = 40;
-  let y = 50;
+    if (logoObj?.dataUrl) {
+      try {
+        doc.addImage(logoObj.dataUrl, "PNG", marginX, y, 70, 70);
+      } catch {}
+    }
 
-  // ---------- ENCABEZADO EMPRESA ----------
-  if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", marginX, y, 70, 70);
-  }
+    const titulo = tipoDoc === "factura" ? "FACTURA" : "COTIZACIÓN";
 
-  const titulo =
-    tipoDoc === "factura"
-      ? "FACTURA"
-      : tipoDoc === "orden"
-      ? "ORDEN DE COMPRA"
-      : tipoDoc === "plan50"
-      ? "PLAN DE PAGO 50 / 50"
-      : "COTIZACIÓN";
-
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(dark);
-  doc.text(EMPRESA.nombre, marginX + 90, y + 10);
-
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(gray);
-  doc.text(EMPRESA.rnc, marginX + 90, y + 26);
-  doc.text(EMPRESA.direccion, marginX + 90, y + 38);
-  doc.text(`Tel: ${EMPRESA.telefono}`, marginX + 90, y + 50);
-  doc.text(`Email: ${EMPRESA.email}`, marginX + 90, y + 62);
-
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(dark);
-  doc.text(titulo, 555, y + 10, { align: "right" });
-
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`No. ${cotizacion.id}`, 555, y + 24, { align: "right" });
-
-  y += 100;
-
-  // ---------- INFO CLIENTE ----------
-  doc.setFillColor(lightGray);
-  doc.roundedRect(marginX, y, 515, 110, 6, 6, "F");
-
-  doc.setFontSize(12);
-  doc.setTextColor(dark);
-
-  let infoY = y + 20;
-  doc.text(`Cliente:`, marginX + 15, infoY);
-  doc.setFont("Helvetica", "normal");
-  doc.text(String(cotizacion.cliente), marginX + 120, infoY);
-
-  doc.setFont("Helvetica", "bold");
-  infoY += 20;
-  doc.text(`Servicio:`, marginX + 15, infoY);
-  doc.setFont("Helvetica", "normal");
-  doc.text(String(cotizacion.servicio || "-"), marginX + 120, infoY);
-
-  infoY += 20;
-  doc.setFont("Helvetica", "bold");
-  doc.text(`Estado:`, marginX + 15, infoY);
-  doc.setFont("Helvetica", "normal");
-  doc.text(formatearEstado(cotizacion.estado), marginX + 120, infoY);
-
-  infoY += 20;
-  doc.setFont("Helvetica", "bold");
-  doc.text(`Fecha:`, marginX + 15, infoY);
-  doc.setFont("Helvetica", "normal");
-  doc.text(
-    new Date(cotizacion.fecha).toLocaleString(),
-    marginX + 120,
-    infoY
-  );
-
-  y += 130;
-
-  // ---------- TABLA DE CONCEPTOS ----------
-  const tableBody = detalle.map((d) => {
-    const cantidad = Number(d.cantidad || 0);
-    const subtotal = Number(d.subtotal || 0);
-    const precioUnit = cantidad > 0 ? subtotal / cantidad : 0;
-
-    return [
-      d.producto?.nombre || "-",
-      cantidad,
-      formatRD(precioUnit),
-      formatRD(subtotal),
-    ];
-  });
-
-  if (servicioNum > 0) {
-    tableBody.push([
-      cotizacion.nombre_servicio ||
-        `Servicio: ${cotizacion.servicio || "Instalación"}`,
-      1,
-      formatRD(servicioNum),
-      formatRD(servicioNum),
-    ]);
-  }
-
-  autoTable(doc, {
-    startY: y,
-    head: [["Concepto", "Cant.", "Precio", "Subtotal"]],
-    body: tableBody,
-    theme: "striped",
-    styles: {
-      fontSize: 11,
-      cellPadding: 6,
-    },
-    headStyles: {
-      fillColor: primary,
-      textColor: "#FFFFFF",
-      fontStyle: "bold",
-    },
-    alternateRowStyles: {
-      fillColor: "#f0f8f8",
-    },
-  });
-
-  const tableEnd = doc.lastAutoTable.finalY + 20;
-
-  // ---------- RESUMEN DE TOTALES ----------
-  const boxHeight = tipoDoc === "plan50" ? 170 : 130;
-
-  doc.setFillColor("#FFFFFF");
-  doc.roundedRect(marginX, tableEnd, 515, boxHeight, 6, 6, "S");
-
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(dark);
-
-  let ty = tableEnd + 25;
-
-  doc.text("Subtotal (antes de ITBIS):", marginX + 20, ty);
-  doc.text(formatRD(base), marginX + 420, ty, { align: "right" });
-
-  ty += 20;
-  doc.text("ITBIS (18%):", marginX + 20, ty);
-  doc.text(formatRD(itebis), marginX + 420, ty, { align: "right" });
-
-  ty += 20;
-  doc.text("Descuento:", marginX + 20, ty);
-  doc.text(
-    `${formatRD(descuentoMonto)} (${descuentoPct}%)`,
-    marginX + 420,
-    ty,
-    { align: "right" }
-  );
-
-  if (tipoDoc === "plan50") {
-    ty += 20;
-    doc.text("Inicial (50%):", marginX + 20, ty);
-    doc.text(formatRD(inicial50), marginX + 420, ty, { align: "right" });
-
-    ty += 20;
-    doc.text("Restante (50%):", marginX + 20, ty);
-    doc.text(formatRD(restante50), marginX + 420, ty, { align: "right" });
-  }
-
-  ty += 30;
-  doc.setFontSize(16);
-  doc.setTextColor(primary);
-  doc.text("TOTAL:", marginX + 20, ty);
-  doc.text(formatRD(total), marginX + 420, ty, { align: "right" });
-
-  // ---------- FIRMA ----------
-  const firmaY = ty + 60;
-  doc.setDrawColor("#000000");
-  doc.line(marginX + 50, firmaY, marginX + 300, firmaY);
-  doc.setFontSize(11);
-  doc.setTextColor(gray);
-  doc.text("Firma del cliente", marginX + 90, firmaY + 15);
-
-  // ---------- PIE ----------
-  doc.setFontSize(10);
-  doc.setTextColor(gray);
-  doc.text("Gracias por preferir Vega Clean.", marginX, 750);
-  doc.text(`WhatsApp: ${EMPRESA.telefono}`, marginX, 765);
-  doc.text(`Email: ${EMPRESA.email}`, marginX, 780);
-
-  return doc;
-}
-
-
-  // =============== PDF ESPECIAL: ORDEN DE COMPRA ==================
-  function construirOrdenCompraPDF(logoDataUrl) {
-    const doc = new jsPDF("p", "pt", "a4");
-
-    const marginX = 40;
-    let y = 50;
-
-    const formatMoney = (value) =>
-      `RD$ ${Number(value || 0).toLocaleString("es-DO", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`;
-
-    const fechaStr = new Date(cotizacion.fecha).toLocaleDateString("es-DO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-
-    const numeroOrden = String(cotizacion.id).padStart(5, "0");
-
-    // TÍTULO
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(24);
-    doc.text("Orden de Compra", marginX, y + 10);
-
-    doc.setFontSize(11);
-    doc.setFont("Helvetica", "normal");
-    doc.text(`Fecha: ${fechaStr}`, 400, y);
-    doc.text(`Nº de orden: ${numeroOrden}`, 400, y + 18);
-
-    y += 50;
-
-    // DATOS PROVEEDOR / CLIENTE
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("Datos del proveedor", marginX, y);
-    doc.text("Datos del cliente", 320, y);
+    doc.setFontSize(16);
+    doc.setTextColor(dark);
+    doc.text(EMPRESA.nombre, marginX + 90, y + 10);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(10);
-    y += 18;
+    doc.setTextColor("#444");
+    doc.text(EMPRESA.rnc, marginX + 90, y + 26);
+    doc.text(EMPRESA.direccion, marginX + 90, y + 38);
+    doc.text(`Tel: ${EMPRESA.telefono}`, marginX + 90, y + 50);
+    doc.text(`Email: ${EMPRESA.email}`, marginX + 90, y + 62);
 
-    const proveedorLines = [
-      `Nombre o razón social: ${EMPRESA.nombre}`,
-      `RNC: ${EMPRESA.rnc}`,
-      `Dirección: ${EMPRESA.direccion}`,
-      `Teléfono: ${EMPRESA.telefono}`,
-      `Correo electrónico: ${EMPRESA.email}`,
-    ];
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(dark);
+    doc.text(titulo, marginX + usableW, y + 10, { align: "right" });
 
-    // Tomar datos desde la solicitud (ticket) cuando existan
-const clienteNombre =
-  (solicitud?.tipo_cliente === "empresa" &&
-    solicitud?.empresa_nombre) ||
-  solicitud?.cliente ||
-  cotizacion.cliente ||
-  "-";
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`No. ${cotizacion?.id}`, marginX + usableW, y + 24, { align: "right" });
 
-const clienteRnc =
-  (solicitud?.tipo_cliente === "empresa" &&
-    solicitud?.empresa_rnc) || "-";
+    y += 100;
 
-const clienteDireccion = solicitud?.direccion || "-";
-const clienteTelefono = solicitud?.telefono || "-";
-const clienteCorreo = solicitud?.email || "-";
+    doc.setFillColor(lightGray);
+    doc.roundedRect(marginX, y, usableW, 95, 6, 6, "F");
 
-const clienteLines = [
-  `Nombre o razón social: ${clienteNombre}`,
-  `RNC / ID: ${clienteRnc}`,
-  `Dirección: ${clienteDireccion}`,
-  `Teléfono: ${clienteTelefono}`,
-  `Correo electrónico: ${clienteCorreo}`,
-];
+    doc.setFontSize(12);
+    doc.setTextColor(dark);
 
+    let infoY = y + 22;
 
-    const lineHeight = 14;
+    doc.setFont("Helvetica", "bold");
+    doc.text("Cliente:", marginX + 15, infoY);
+    doc.setFont("Helvetica", "normal");
+    doc.text(textoSeguro(cliNombre), marginX + 120, infoY);
 
-    proveedorLines.forEach((line, idx) => {
-      doc.text(line, marginX, y + idx * lineHeight);
-    });
+    infoY += 18;
+    doc.setFont("Helvetica", "bold");
+    doc.text("Documento:", marginX + 15, infoY);
+    doc.setFont("Helvetica", "normal");
+    doc.text(textoSeguro(cliDoc), marginX + 120, infoY);
 
-    clienteLines.forEach((line, idx) => {
-      doc.text(line, 320, y + idx * lineHeight);
-    });
+    infoY += 18;
+    doc.setFont("Helvetica", "bold");
+    doc.text("Estado:", marginX + 15, infoY);
+    doc.setFont("Helvetica", "normal");
+    doc.text(formatearEstado(cotizacion?.estado), marginX + 120, infoY);
 
-    const tableY = y + proveedorLines.length * lineHeight + 20;
+    infoY += 18;
+    doc.setFont("Helvetica", "bold");
+    doc.text("Fecha:", marginX + 15, infoY);
+    doc.setFont("Helvetica", "normal");
+    doc.text(new Date(cotizacion?.fecha).toLocaleString(), marginX + 120, infoY);
 
-    // TABLA DE ITEMS
-    const body = detalle.map((d, index) => {
+    y += 115;
+
+    const body = detalle.map((d) => {
       const cantidad = Number(d.cantidad || 0);
-      const subtotal = Number(d.subtotal || 0);
-      const unit = cantidad > 0 ? subtotal / cantidad : 0;
+      const subtotalLocal = Number(d.subtotal || 0);
+      const unit = cantidad > 0 ? subtotalLocal / cantidad : 0;
 
       return [
-        `#${d.producto_id || index + 1}`,
-        d.producto?.nombre || "-",
+        `${d.tipo === "equipo" ? "Equipo" : "Producto"} - ${d.nombre || "-"}`,
         cantidad,
-        formatMoney(unit),
-        formatMoney(subtotal),
+        formatRD(unit),
+        formatRD(subtotalLocal),
       ];
     });
 
-    if (servicioNum > 0) {
-      body.push([
-        "SERV",
-        cotizacion.nombre_servicio ||
-          `Servicio: ${cotizacion.servicio || "Instalación"}`,
-        1,
-        formatMoney(servicioNum),
-        formatMoney(servicioNum),
-      ]);
-    }
-
     autoTable(doc, {
-      startY: tableY,
-      head: [
-        ["Ref.", "Descripción", "Cantidad", "Precio unitario", "Precio total"],
-      ],
+      startY: y,
+      head: [["Concepto", "Cant.", "Precio", "Subtotal"]],
       body,
-      styles: { fontSize: 10, cellPadding: 6 },
-      headStyles: {
-        fillColor: [245, 245, 245],
-        textColor: 0,
-        fontStyle: "bold",
-      },
+      theme: "striped",
+      styles: { fontSize: 11, cellPadding: 6 },
+      headStyles: { fillColor: primary, textColor: "#FFFFFF", fontStyle: "bold" },
+      alternateRowStyles: { fillColor: "#f0f8f8" },
     });
 
     const endY = doc.lastAutoTable.finalY + 20;
 
-    // TOTALES ESTILO ORDEN DE COMPRA
-    const totalPedido = base; // subtotal productos + servicio
-    const montoDescuento = descuentoMonto; // ya calculado sobre base
-    const gastosEnvio = 0; // si luego agregas campo en BD lo pones aquí
-    const totalConDescuento = totalPedido - montoDescuento + gastosEnvio;
+    doc.setFillColor("#FFFFFF");
+    doc.roundedRect(marginX, endY, usableW, 130, 6, 6, "S");
 
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(12);
+    doc.setTextColor(dark);
 
-    doc.text("Total pedido", 400, endY);
-    doc.text(formatMoney(totalPedido), 540, endY, { align: "right" });
+    let ty = endY + 25;
 
-    let ty = endY + 16;
+    doc.text("Subtotal:", marginX + 20, ty);
+    doc.text(formatRD(subtotal), marginX + usableW - 20, ty, { align: "right" });
 
-    if (descuentoPct > 0) {
-      doc.setFont("Helvetica", "normal");
-      doc.text(`Descuento (${descuentoPct}%):`, 400, ty);
-      doc.text(`- ${formatMoney(montoDescuento)}`, 540, ty, {
-        align: "right",
-      });
-      ty += 16;
-    }
-
-    if (gastosEnvio > 0) {
-      doc.text("Gastos de envío:", 400, ty);
-      doc.text(formatMoney(gastosEnvio), 540, ty, { align: "right" });
-      ty += 16;
-    }
-
-    doc.setFont("Helvetica", "bold");
-    doc.text("Total a pagar", 400, ty + 4);
-    doc.text(formatMoney(totalConDescuento), 540, ty + 4, {
+    ty += 20;
+    doc.text("Descuento:", marginX + 20, ty);
+    doc.text(`${formatRD(descuentoMonto)} (${descuentoPct}%)`, marginX + usableW - 20, ty, {
       align: "right",
     });
 
-    // CAMPOS DE ENTREGA + FIRMA
-    let bottomY = ty + 50;
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(10);
+    ty += 20;
+    doc.text("ITBIS (18%):", marginX + 20, ty);
+    doc.text(formatRD(itbis), marginX + usableW - 20, ty, { align: "right" });
 
-    doc.text("Fecha de entrega: ______________________________", marginX, bottomY);
-    bottomY += 20;
-    doc.text(
-      "Dirección de entrega: ___________________________",
-      marginX,
-      bottomY
-    );
-    bottomY += 20;
-    doc.text("Notas: ________________________________________", marginX, bottomY);
-
-    bottomY += 80;
-    doc.line(350, bottomY, 530, bottomY);
-    doc.text("Firma del receptor", 390, bottomY + 15);
+    ty += 30;
+    doc.setFontSize(16);
+    doc.setTextColor(primary);
+    doc.text("TOTAL:", marginX + 20, ty);
+    doc.text(formatRD(total), marginX + usableW - 20, ty, { align: "right" });
 
     return doc;
   }
 
   async function handleDescargar(tipoDoc = "cotizacion") {
-    const logo = await cargarLogo();
-
-    // Para "orden" usamos el PDF especial de orden de compra
-    const doc =
-      tipoDoc === "orden"
-        ? construirOrdenCompraPDF(logo)
-        : construirPDF(logo, tipoDoc);
-
-    const prefijo =
-      tipoDoc === "factura"
-        ? "factura"
-        : tipoDoc === "orden"
-        ? "orden_compra"
-        : tipoDoc === "plan50"
-        ? "plan_50_50"
-        : "cotizacion";
-
-    doc.save(`${prefijo}_${cotizacion.id}.pdf`);
-  }
-
-  // =============== LÓGICA DE EDICIÓN (igual que antes) ===============
-
-  function agregarLineaProducto() {
-    if (!productos || productos.length === 0) {
-      Swal.fire(
-        "Sin productos",
-        "No hay productos registrados para agregar.",
-        "warning"
-      );
-      return;
+    try {
+      const logo = await cargarLogoRobustoPng();
+      const pdf = construirPDF(logo, tipoDoc);
+      pdf.save(`${tipoDoc}_${cotizacion?.id}.pdf`);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo generar el PDF. Verifica el logo en /public o el contenido.", "error");
     }
-
-    const primerProducto = productos[0];
-
-    setEditDetalle((prev) => [
-      ...prev,
-      { producto_id: primerProducto.id, cantidad: 1 },
-    ]);
   }
 
+  // ------------- EDICIÓN (solo admin) -------------
   function actualizarLinea(index, campo, valor) {
-    setEditDetalle((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              [campo]:
-                campo === "cantidad"
-                  ? Number(valor) < 1
-                    ? 1
-                    : Number(valor)
-                  : valor,
-            }
-          : item
-      )
-    );
-  }
-
-  function eliminarLinea(index) {
-    setEditDetalle((prev) => prev.filter((_, i) => i !== index));
+    setEditDetalle((prev) => prev.map((it, i) => (i === index ? { ...it, [campo]: valor } : it)));
   }
 
   async function guardarEdicion() {
     if (!cotizacion) return;
 
-    if (cotizacion.estado === "aceptada") {
-      Swal.fire(
-        "No editable",
-        "No se puede editar una cotización que ya está aceptada, para no afectar el inventario.",
-        "warning"
-      );
+    if (!allowEdit) {
+      Swal.fire("Bloqueado", "El rol vendedor no puede editar cotizaciones.", "warning");
       return;
     }
 
-    if (
-      editDetalle.length === 0 &&
-      (!editPrecioServicio || Number(editPrecioServicio) <= 0)
-    ) {
-      Swal.fire(
-        "Sin conceptos",
-        "Debes tener al menos un producto o un servicio con precio.",
-        "warning"
-      );
+    // ✅ Si ya está en preparación/aceptada, bloquea edición
+    if (cotizacion.estado === "aceptada" || cotizacion.estado === "preparacion") {
+      Swal.fire("No editable", "No se puede editar una cotización enviada a almacén.", "warning");
       return;
     }
 
-    for (const item of editDetalle) {
-      if (!item.producto_id) {
-        Swal.fire(
-          "Producto inválido",
-          "Hay una línea sin producto seleccionado.",
-          "warning"
-        );
-        return;
-      }
-      if (!item.cantidad || Number(item.cantidad) <= 0) {
-        Swal.fire(
-          "Cantidad inválida",
-          "Las cantidades deben ser mayores que cero.",
-          "warning"
-        );
-        return;
-      }
+    let newSubtotal = 0;
+
+    for (const it of editDetalle) {
+      const row = detalle.find((d) =>
+        it.tipo === "producto" ? d.producto_id === it.item_id : d.equipo_id === it.item_id
+      );
+      const precioBase = Number(row?.precio_base_snapshot || row?.item?.precio || 0);
+      const extra = Number(it.extra_unitario || 0);
+      const unit = precioBase + extra;
+      const cant = Number(it.cantidad || 1);
+      newSubtotal += unit * cant;
     }
 
-    let subtotalProd = 0;
-    const detallesAInsertar = [];
-
-    for (const item of editDetalle) {
-      const prod = productos.find((p) => p.id === item.producto_id);
-      const price = prod ? Number(prod.precio) : 0;
-      const cant = Number(item.cantidad || 0);
-      const sub = price * cant;
-      subtotalProd += sub;
-
-      detallesAInsertar.push({
-        producto_id: item.producto_id,
-        cantidad: cant,
-        subtotal: sub,
-      });
-    }
-
-    const baseLocal = subtotalProd + Number(editPrecioServicio || 0);
     const descPct = Number(editDescuento || 0);
-    const totalLocal = baseLocal - (baseLocal * descPct) / 100;
+    const descuentoM = (newSubtotal * descPct) / 100;
+    const totalLocal = newSubtotal - descuentoM + (newSubtotal - descuentoM) * 0.18;
 
-    if (totalLocal <= 0) {
-      Swal.fire(
-        "Total inválido",
-        "El total calculado debe ser mayor que cero.",
-        "error"
-      );
-      return;
-    }
-
-    const { error: errUpdateCot } = await supabase
+    const { error: errUpdate } = await supabase
       .from("cotizaciones")
-      .update({
-        nombre_servicio: editNombreServicio || null,
-        precio_servicio: Number(editPrecioServicio) || 0,
-        descuento: descPct,
-        total: totalLocal,
-      })
-      .eq("id", id);
+      .update({ descuento: descPct, total: totalLocal })
+      .eq("id", Number(id));
 
-    if (errUpdateCot) {
-      console.error(errUpdateCot);
-      Swal.fire(
-        "Error",
-        "No se pudo actualizar la cabecera de la cotización.",
-        "error"
-      );
+    if (errUpdate) {
+      console.error(errUpdate);
+      Swal.fire("Error", "No se pudo actualizar la cotización.", "error");
       return;
     }
 
-    const { error: errDelete } = await supabase
-      .from("detalle_cotizacion")
-      .delete()
-      .eq("cotizacion_id", id);
+    await supabase.from("detalle_cotizacion").delete().eq("cotizacion_id", Number(id));
 
-    if (errDelete) {
-      console.error(errDelete);
-      Swal.fire(
-        "Error",
-        "No se pudo limpiar el detalle anterior.",
-        "error"
+    const inserts = editDetalle.map((it) => {
+      const row = detalle.find((d) =>
+        it.tipo === "producto" ? d.producto_id === it.item_id : d.equipo_id === it.item_id
       );
+      const precioBase = Number(row?.precio_base_snapshot || row?.item?.precio || 0);
+      const extra = Number(it.extra_unitario || 0);
+      const unit = precioBase + extra;
+      const cant = Number(it.cantidad || 1);
+
+      return {
+        cotizacion_id: Number(id),
+        cantidad: cant,
+        precio_base_snapshot: precioBase,
+        extra_unitario: extra,
+        precio_unitario: unit,
+        subtotal: unit * cant,
+        producto_id: it.tipo === "producto" ? it.item_id : null,
+        equipo_id: it.tipo === "equipo" ? it.item_id : null,
+      };
+    });
+
+    const { error: errIns } = await supabase.from("detalle_cotizacion").insert(inserts);
+    if (errIns) {
+      console.error(errIns);
+      Swal.fire("Error", "No se pudo guardar el detalle editado.", "error");
       return;
-    }
-
-    if (detallesAInsertar.length > 0) {
-      const { error: errInsert } = await supabase
-        .from("detalle_cotizacion")
-        .insert(
-          detallesAInsertar.map((d) => ({
-            cotizacion_id: Number(id),
-            ...d,
-          }))
-        );
-
-      if (errInsert) {
-        console.error(errInsert);
-        Swal.fire(
-          "Error",
-          "No se pudo guardar el nuevo detalle de la cotización.",
-          "error"
-        );
-        return;
-      }
     }
 
     Swal.fire("Cambios guardados", "La cotización fue actualizada.", "success");
     setEditMode(false);
-    fetchCotizacion();
+    await fetchCotizacionYDetalle();
   }
 
-  // =================================================
+  if (!cotizacion) return <p style={{ padding: "2rem" }}>Cargando...</p>;
+
+  const clienteUI = clienteRef ? labelCliente(clienteRef) : cotizacion.cliente || "-";
+  const docUI = clienteRef
+    ? clienteRef.tipo_cliente === "empresa"
+      ? clienteRef.empresa_rnc
+      : clienteRef.cedula
+    : preventa?.tipo_cliente === "empresa"
+    ? preventa?.empresa_rnc
+    : preventa?.cedula;
 
   return (
     <Wrapper>
       <Card>
-        <Title>Vega Clean</Title>
+        <Title>{EMPRESA.nombre}</Title>
         <p style={{ textAlign: "center", opacity: 0.8 }}>
           {formatearEstado(cotizacion.estado)} — #{cotizacion.id}
         </p>
 
-        <SectionTitle>Información del Cliente</SectionTitle>
+        <SectionTitle>Información</SectionTitle>
 
         <InfoRow>
           <span>
             <Strong>Cliente:</Strong>
           </span>
-          <span>{cotizacion.cliente}</span>
+          <span style={{ textAlign: "right" }}>{clienteUI}</span>
         </InfoRow>
 
         <InfoRow>
           <span>
-            <Strong>Servicio:</Strong>
+            <Strong>Documento:</Strong>
           </span>
-          <span>{cotizacion.servicio || "-"}</span>
+          <span style={{ textAlign: "right" }}>{textoSeguro(docUI) || "-"}</span>
         </InfoRow>
 
-        {cotizacion.solicitud_id && (
+        {cotizacion.preventa_id && (
           <InfoRow>
             <span>
-              <Strong>Ticket vinculado:</Strong>
+              <Strong>Preventa vinculada:</Strong>
             </span>
-            <span>#{cotizacion.solicitud_id}</span>
+            <span>#{cotizacion.preventa_id}</span>
           </InfoRow>
         )}
 
@@ -975,21 +873,13 @@ const clienteLines = [
             <Strong>Estado:</Strong>
           </span>
           <span>
-            <EstadoBadge estado={cotizacion.estado || "pendiente"}>
+            <EstadoBadge $estado={cotizacion.estado || "pendiente"}>
               ● {formatearEstado(cotizacion.estado)}
             </EstadoBadge>
           </span>
         </InfoRow>
 
-        {/* BOTONES ESTADO + EDITAR */}
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            marginTop: "10px",
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
           <button
             onClick={() => cambiarEstado("aceptada")}
             style={{
@@ -1002,7 +892,7 @@ const clienteLines = [
               fontWeight: 600,
             }}
           >
-            ✔ Aceptar
+            Enviar al Almacen
           </button>
 
           <button
@@ -1017,7 +907,7 @@ const clienteLines = [
               fontWeight: 600,
             }}
           >
-            ✖ Rechazar
+            Rechazar
           </button>
 
           <button
@@ -1032,22 +922,24 @@ const clienteLines = [
               fontWeight: 600,
             }}
           >
-            🕒 Pendiente
+            Pendiente
           </button>
 
           <button
-            onClick={() => setEditMode((prev) => !prev)}
+            onClick={() => setEditMode((p) => !p)}
             style={{
-              background: "#00bcd4",
+              background: allowEdit ? "#00bcd4" : "#999",
               color: "white",
               border: "none",
               padding: "6px 12px",
               borderRadius: "6px",
-              cursor: "pointer",
+              cursor: allowEdit ? "pointer" : "not-allowed",
               fontWeight: 600,
             }}
+            disabled={!allowEdit}
+            title={!allowEdit ? "Vendedor no puede editar" : ""}
           >
-            ✏️ {editMode ? "Cancelar edición" : "Editar cotización"}
+            {editMode ? "Cancelar edición" : "Editar"}
           </button>
         </div>
 
@@ -1055,204 +947,107 @@ const clienteLines = [
           <span>
             <Strong>Fecha:</Strong>
           </span>
-          <span>{new Date(cotizacion.fecha).toLocaleString()}</span>
+          <span>{cotizacion.fecha ? new Date(cotizacion.fecha).toLocaleString() : "-"}</span>
         </InfoRow>
 
-        <SectionTitle>Conceptos Cotizados</SectionTitle>
+        <SectionTitle>Items Cotizados</SectionTitle>
 
         <Table>
           <thead>
             <tr>
+              <th>Tipo</th>
               <th>Concepto</th>
               <th>Cantidad</th>
-              <th>Precio</th>
+              <th>Precio unitario</th>
               <th>Subtotal</th>
             </tr>
           </thead>
           <tbody>
             {detalle.map((d, i) => {
-              const cantidad = Number(d.cantidad || 0);
-              const subtotal = Number(d.subtotal || 0);
-              const precioUnit = cantidad > 0 ? subtotal / cantidad : 0;
+              const cant = Number(d.cantidad || 0);
+              const sub = Number(d.subtotal || 0);
+              const unit = cant > 0 ? sub / cant : 0;
 
               return (
                 <tr key={i}>
-                  <td>{d.producto?.nombre || "-"}</td>
-                  <td>{cantidad}</td>
-                  <td>RD${precioUnit.toFixed(2)}</td>
-                  <td>RD${subtotal.toFixed(2)}</td>
+                  <td>{d.tipo}</td>
+                  <td>
+                    {d.nombre || "-"}
+                    {d.modelo ? <div style={{ fontSize: 12, opacity: 0.8 }}>Modelo: {d.modelo}</div> : null}
+                    {d.producto_id != null || d.equipo_id != null ? (
+                      <div style={{ fontSize: 12, opacity: 0.75 }}>
+                        Ref: {d.producto_id != null ? `P-${d.producto_id}` : `E-${d.equipo_id}`}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>{cant}</td>
+                  <td>{formatRD(unit)}</td>
+                  <td>{formatRD(sub)}</td>
                 </tr>
               );
             })}
-            {servicioNum > 0 && (
-              <tr>
-                <td>
-                  {cotizacion.nombre_servicio ||
-                    `Servicio: ${cotizacion.servicio || "Instalación"}`}
-                </td>
-                <td>1</td>
-                <td>RD${servicioNum.toFixed(2)}</td>
-                <td>RD${servicioNum.toFixed(2)}</td>
-              </tr>
-            )}
           </tbody>
         </Table>
 
-        {/* ======= BLOQUE EDICIÓN ======= */}
         {editMode && (
           <>
-            <SectionTitle>Editar cotización</SectionTitle>
+            <SectionTitle>Editar (cantidades / extra / descuento)</SectionTitle>
 
-            <p
-              style={{
-                fontSize: "0.9rem",
-                opacity: 0.75,
-                marginBottom: "0.8rem",
-              }}
-            >
-              Los cambios se aplican al guardar. No se permite editar cotizaciones
-              aceptadas.
+            <p style={{ fontSize: "0.9rem", opacity: 0.75 }}>
+              No se permite editar cotizaciones aceptadas o enviadas a almacén. El rol vendedor no puede editar.
             </p>
 
-            <div style={{ marginBottom: "1rem" }}>
-              <strong>Productos:</strong>
+            {editDetalle.map((it, idx) => {
+              const row = detalle.find((d) =>
+                it.tipo === "producto" ? d.producto_id === it.item_id : d.equipo_id === it.item_id
+              );
 
-              {editDetalle.map((item, index) => (
+              const nombre =
+                row?.nombre || (it.tipo === "producto" ? `Producto #${it.item_id}` : `Equipo #${it.item_id}`);
+
+              return (
                 <div
-                  key={index}
+                  key={idx}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "2fr 1fr auto",
+                    gridTemplateColumns: "1fr 2fr 1fr 1fr",
                     gap: "0.5rem",
                     marginTop: "0.5rem",
+                    alignItems: "center",
                   }}
                 >
-                  <select
-                    value={item.producto_id || ""}
-                    onChange={(e) =>
-                      actualizarLinea(index, "producto_id", Number(e.target.value))
-                    }
-                    style={{
-                      padding: "0.4rem",
-                      borderRadius: "6px",
-                      border: "1px solid #ccc",
-                    }}
-                  >
-                    <option value="">Seleccione un producto</option>
-                    {productos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre} - RD${p.precio}
-                      </option>
-                    ))}
-                  </select>
+                  <div>{it.tipo}</div>
+                  <div>{nombre}</div>
 
                   <input
                     type="number"
                     min="1"
-                    value={item.cantidad}
-                    onChange={(e) =>
-                      actualizarLinea(index, "cantidad", e.target.value)
-                    }
-                    style={{
-                      padding: "0.4rem",
-                      borderRadius: "6px",
-                      border: "1px solid #ccc",
-                    }}
+                    value={it.cantidad}
+                    onChange={(e) => actualizarLinea(idx, "cantidad", Number(e.target.value))}
+                    style={{ padding: "0.4rem", borderRadius: "6px", border: "1px solid #ccc" }}
                   />
 
-                  <button
-                    type="button"
-                    onClick={() => eliminarLinea(index)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#c0392b",
-                      cursor: "pointer",
-                      fontSize: "1.1rem",
-                    }}
-                  >
-                    🗑
-                  </button>
+                  <input
+                    type="number"
+                    value={it.extra_unitario}
+                    onChange={(e) => actualizarLinea(idx, "extra_unitario", Number(e.target.value))}
+                    style={{ padding: "0.4rem", borderRadius: "6px", border: "1px solid #ccc" }}
+                    placeholder="extra"
+                  />
                 </div>
-              ))}
+              );
+            })}
 
-              <button
-                type="button"
-                onClick={agregarLineaProducto}
-                style={{
-                  marginTop: "0.7rem",
-                  background: "#00bcd4",
-                  color: "white",
-                  border: "none",
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                }}
-              >
-                + Agregar producto
-              </button>
-            </div>
-
-            <div style={{ display: "grid", gap: "0.6rem" }}>
-              <div>
-                <label style={{ fontSize: "0.9rem" }}>
-                  Descripción del servicio:
-                </label>
-                <input
-                  type="text"
-                  value={editNombreServicio}
-                  onChange={(e) => setEditNombreServicio(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #ccc",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "0.9rem" }}>Precio del servicio:</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editPrecioServicio}
-                  onChange={(e) =>
-                    setEditPrecioServicio(
-                      e.target.value === "" ? 0 : Number(e.target.value)
-                    )
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #ccc",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "0.9rem" }}>Descuento (%):</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={editDescuento}
-                  onChange={(e) =>
-                    setEditDescuento(
-                      e.target.value === "" ? 0 : Number(e.target.value)
-                    )
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #ccc",
-                  }}
-                />
-              </div>
+            <div style={{ marginTop: "1rem" }}>
+              <label>Descuento (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={editDescuento}
+                onChange={(e) => setEditDescuento(e.target.value === "" ? 0 : Number(e.target.value))}
+                style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #ccc" }}
+              />
             </div>
 
             <Button onClick={guardarEdicion}>Guardar cambios</Button>
@@ -1263,59 +1058,39 @@ const clienteLines = [
 
         <TotalBox>
           <TotalRow>
-            <span>Subtotal (antes de ITBIS):</span>
-            <Strong>RD${base.toFixed(2)}</Strong>
+            <span>Subtotal:</span>
+            <Strong>{formatRD(subtotal)}</Strong>
           </TotalRow>
-
-          <TotalRow>
-            <span>ITBIS (18%):</span>
-            <Strong>RD${itebis.toFixed(2)}</Strong>
-          </TotalRow>
-
           <TotalRow>
             <span>Descuento:</span>
             <Strong>
-              RD${descuentoMonto.toFixed(2)} ({descuentoPct}%)
+              {formatRD(descuentoMonto)} ({descuentoPct}%)
             </Strong>
           </TotalRow>
-
+          <TotalRow>
+            <span>ITBIS (18%):</span>
+            <Strong>{formatRD(itbis)}</Strong>
+          </TotalRow>
           <TotalRow>
             <span style={{ fontSize: "1.2rem" }}>TOTAL:</span>
-            <Strong style={{ fontSize: "1.2rem" }}>
-              RD${total.toFixed(2)}
-            </Strong>
+            <Strong style={{ fontSize: "1.2rem" }}>{formatRD(total)}</Strong>
           </TotalRow>
         </TotalBox>
 
-        <div style={{ marginTop: "2rem" }}>
-          <p style={{ marginBottom: "3rem" }}>______________________________</p>
-          <p style={{ fontSize: "0.9rem", opacity: 0.8 }}>Firma del cliente</p>
-        </div>
-
-        {/* BOTONES PDFs */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.5rem",
-            marginTop: "1rem",
-          }}
-        >
+        <div style={{ marginTop: "0.5rem" }}>
           <Button onClick={() => handleDescargar("cotizacion")}>
             <Download size={18} />
             Descargar cotización (PDF)
           </Button>
+
           <Button onClick={() => handleDescargar("factura")}>
             <Download size={18} />
             Descargar factura (PDF)
           </Button>
+
           <Button onClick={() => handleDescargar("orden")}>
             <Download size={18} />
             Descargar orden de compra (PDF)
-          </Button>
-          <Button onClick={() => handleDescargar("plan50")}>
-            <Download size={18} />
-            Descargar plan 50/50 (PDF)
           </Button>
         </div>
       </Card>
