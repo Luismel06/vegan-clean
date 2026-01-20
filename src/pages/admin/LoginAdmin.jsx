@@ -1,8 +1,8 @@
+// src/pages/admin/LoginAdmin.jsx
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import { GoogleLogin } from "@react-oauth/google";
 import { useEffect } from "react";
 
 const Container = styled.div`
@@ -55,6 +55,11 @@ const Button = styled.button`
     opacity: 0.9;
     transform: scale(1.02);
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const Divider = styled.div`
@@ -94,78 +99,87 @@ const BackButton = styled.button`
   }
 `;
 
+function normalizeRole(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
 export default function LoginAdmin() {
   const navigate = useNavigate();
 
-  //   Si ya hay sesión, redirigir directamente
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) {
-        navigate("/admin");
-      }
-    };
-    checkSession();
-  }, [navigate]);
-
-  // === Iniciar sesión con Google ===
+  // === Login con Google ===
   const handleGoogleLogin = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: window.location.origin + "/admin/login",
-    },
-  });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        // Mantén esto si ya te funciona con tu configuración
+        redirectTo: window.location.origin + "/admin/login",
+      },
+    });
 
-  if (error) {
-    Swal.fire("Error", "Hubo un problema al iniciar sesión con Google.", "error");
-  }
-};
+    if (error) {
+      Swal.fire("Error", "Hubo un problema al iniciar sesión con Google.", "error");
+    }
+  };
 
-
-
-  // === Validar usuario al iniciar sesión ===
+  // === Redirigir si ya hay sesión (pero dependiendo del rol) ===
   useEffect(() => {
-    const validateUser = async () => {
+    const validateAndRedirect = async () => {
       const { data: sessionData } = await supabase.auth.getUser();
       const user = sessionData?.user;
 
-      if (user?.email) {
-        // Buscar el rol del usuario en la tabla usuarios
-        const { data: usuario } = await supabase
-          .from("usuarios")
-          .select("rol")
-          .eq("email", user.email)
-          .single();
+      if (!user?.email) return;
 
-        if (!usuario) {
-          await supabase.auth.signOut();
-          Swal.fire({
-            icon: "error",
-            title: "Acceso denegado",
-            text: "Tu cuenta no está registrada en el sistema.",
-            confirmButtonColor: "#00bcd4",
-          });
-          return;
-        }
+      // Buscar el rol del usuario en la tabla usuarios
+      const { data: usuario, error } = await supabase
+        .from("usuarios")
+        .select("rol")
+        .eq("email", user.email)
+        .maybeSingle();
 
-        // Redirigir según el rol
-        if (["admin", "administrador"].includes(usuario.rol)) {
-  navigate("/admin", { replace: true });
-} else if (["vendedor", "Vendedor"].includes(usuario.rol)) {
-  navigate("/vendedor/catalogo", { replace: true });
-} else {
-  Swal.fire({
-    icon: "warning",
-    title: "Rol no válido",
-    text: `Tu cuenta no tiene un rol asignado válido.`,
-    confirmButtonColor: "#00bcd4",
-  });
-}
-
+      if (error) {
+        console.error(error);
+        Swal.fire("Error", "No se pudo validar tu usuario.", "error");
+        return;
       }
+
+      if (!usuario) {
+        await supabase.auth.signOut();
+        Swal.fire({
+          icon: "error",
+          title: "Acceso denegado",
+          text: "Tu cuenta no está registrada en el sistema.",
+          confirmButtonColor: "#00bcd4",
+        });
+        return;
+      }
+
+      const rol = normalizeRole(usuario.rol);
+
+      // Redirigir según el rol
+      if (["admin", "administrador"].includes(rol)) {
+        navigate("/admin", { replace: true });
+        return;
+      }
+
+      if (["vendedor"].includes(rol)) {
+        navigate("/vendedor/catalogo", { replace: true });
+        return;
+      }
+
+      if (["almacenista"].includes(rol)) {
+        navigate("/almacen/cotizaciones", { replace: true });
+        return;
+      }
+
+      Swal.fire({
+        icon: "warning",
+        title: "Rol no válido",
+        text: "Tu cuenta no tiene un rol asignado válido.",
+        confirmButtonColor: "#00bcd4",
+      });
     };
-    validateUser();
+
+    validateAndRedirect();
   }, [navigate]);
 
   return (
@@ -176,7 +190,7 @@ export default function LoginAdmin() {
           Inicia sesión para acceder a tu cuenta.
         </p>
 
-        {/* Login manual (para futuro uso con usuarios) */}
+        {/* Login manual (deshabilitado por ahora) */}
         <Input type="email" placeholder="Correo electrónico" />
         <Input type="password" placeholder="Contraseña" />
         <Button disabled>Iniciar sesión</Button>
@@ -193,7 +207,6 @@ export default function LoginAdmin() {
           Acceder con Google
         </Button>
 
-        {/* Volver al inicio */}
         <BackButton onClick={() => navigate("/")}>Volver al inicio</BackButton>
       </Card>
     </Container>

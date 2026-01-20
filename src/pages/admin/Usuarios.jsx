@@ -139,6 +139,7 @@ export default function Usuarios() {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [rol, setRol] = useState("vendedor");
+  const [area, setArea] = useState("Santo Domingo");
   const [usuarios, setUsuarios] = useState([]);
 
   // === Leer usuarios ===
@@ -170,6 +171,7 @@ export default function Usuarios() {
       setNombre("");
       setEmail("");
       setRol("vendedor");
+      setArea("Santo Domingo");
       fetchUsuarios();
     } catch (error) {
       Swal.fire("Error", "No se pudo crear el usuario.", "error");
@@ -227,6 +229,13 @@ export default function Usuarios() {
           <option value="admin">Administrador</option>
           <option value="almacenista">Almacenista</option>
         </Select>
+        <Label>Area</Label>
+        <Select value={area} onChange={(e) => setArea(e.target.value)}>
+          <option value="Santo Domingo">Santo Domingo</option>
+          <option value="Vega">Vega</option>
+          <option value="Santiago">Santiago</option>
+        </Select>
+
 
         <Button onClick={handleCrearEmpleado}>
           <UserPlus size={18} />

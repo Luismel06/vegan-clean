@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 
 // --- Guards ---
 import RouteGuard from "../components/RouteGuard";
@@ -7,6 +7,7 @@ import RouteGuard from "../components/RouteGuard";
 import { ClienteLayout } from "../layouts/ClienteLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
 import { VendedorLayout } from "../layouts/VendedorLayout";
+import { AlmacenLayout } from "../layouts/AlmacenLayout"; // <-- IMPORTANTE (créalo si no existe)
 
 // --- Páginas del cliente ---
 import Inicio from "../pages/cliente/Inicio";
@@ -20,35 +21,30 @@ import Dashboard from "../pages/admin/Dashboard";
 import Usuarios from "../pages/admin/Usuarios";
 import Tickets from "../pages/admin/Tickets";
 import Productos from "../pages/admin/Productos";
-//import ServiciosAdmin from "../pages/admin/Servicios";---> ya no se usara (lo dejo comentado por si acaso)
 import Equipos from "../pages/admin/Equipos";
 import PreventaDetalle from "../pages/admin/PreventaDetalle";
 import PublicacionesAdmin from "../pages/admin/Publicaciones";
 import Cotizaciones from "../pages/admin/Cotizaciones";
 import VistaCotizacion from "../pages/admin/VistaCotizacion";
 
-// --- Páginas técnico ---
+// --- Páginas Vendedor ---
 import VendedorCatalogo from "../pages/vendedor/VendedorCatalogo";
 import VendedorHistorial from "../pages/vendedor/VendedorHistorial";
 import DashboardVendedor from "../pages/vendedor/DashboardVendedor";
 
+// --- Páginas Almacén ---
+import AlmacenCotizaciones from "../pages/almacen/AlmacenCotizaciones.jsx";
+import AlmacenDespacho from "../pages/almacen/AlmacenDespacho.jsx";
+
 // --- Login ---
 import LoginAdmin from "../pages/admin/LoginAdmin";
 
-// --- Página no autorizado ---
+// --- No autorizado ---
 import NoAutorizado from "../pages/NoAutorizado";
 
-// --- Página de error ---
 function NotFound() {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "5rem 1rem",
-        color: "#00bcd4",
-        fontFamily: "sans-serif",
-      }}
-    >
+    <div style={{ textAlign: "center", padding: "5rem 1rem", color: "#00bcd4", fontFamily: "sans-serif" }}>
       <h1>404 - Página no encontrada</h1>
       <p>La ruta solicitada no existe.</p>
       <a
@@ -75,11 +71,11 @@ const router = createBrowserRouter([
     path: "/",
     element: <ClienteLayout />,
     children: [
-      { path: "/", element: <Inicio /> },
-      { path: "/servicios", element: <Servicios /> },
-      { path: "/publicaciones", element: <Publicaciones /> },
-      { path: "/contacto", element: <Contacto /> },
-      { path: "/nosotros", element: <Nosotros /> },
+      { index: true, element: <Inicio /> }, // mejor que { path:"/" }
+      { path: "servicios", element: <Servicios /> },
+      { path: "publicaciones", element: <Publicaciones /> },
+      { path: "contacto", element: <Contacto /> },
+      { path: "nosotros", element: <Nosotros /> },
     ],
   },
 
@@ -92,20 +88,19 @@ const router = createBrowserRouter([
       </RouteGuard>
     ),
     children: [
-      { path: "/admin", element: <Dashboard /> },
-      { path: "/admin/usuarios", element: <Usuarios /> },
-      { path: "/admin/tickets", element: <Tickets /> },
-      { path: "/admin/productos", element: <Productos /> },
-      //{ path: "/admin/servicios", element: <ServiciosAdmin /> },
-      { path: "/admin/equipos", element: <Equipos /> },
-      { path: "/admin/preventa/:id", element: <PreventaDetalle /> },
-      { path: "/admin/publicaciones", element: <PublicacionesAdmin /> },
-      { path: "/admin/cotizaciones", element: <Cotizaciones /> },
-      { path: "/admin/cotizaciones/:id", element: <VistaCotizacion /> },
+      { index: true, element: <Dashboard /> },
+      { path: "usuarios", element: <Usuarios /> },
+      { path: "tickets", element: <Tickets /> },
+      { path: "productos", element: <Productos /> },
+      { path: "equipos", element: <Equipos /> },
+      { path: "preventa/:id", element: <PreventaDetalle /> },
+      { path: "publicaciones", element: <PublicacionesAdmin /> },
+      { path: "cotizaciones", element: <Cotizaciones /> },
+      { path: "cotizaciones/:id", element: <VistaCotizacion /> },
     ],
   },
 
-  // === TÉCNICO (solo vendedor) ===
+  // === VENDEDOR (solo vendedor) ===
   {
     path: "/vendedor",
     element: (
@@ -114,9 +109,25 @@ const router = createBrowserRouter([
       </RouteGuard>
     ),
     children: [
-      { path: "/vendedor/dashboard", element: <DashboardVendedor /> },
-     { path: "/vendedor/catalogo", element: <VendedorCatalogo /> },
-    { path: "/vendedor/historial", element: <VendedorHistorial /> },
+      { index: true, element: <Navigate to="/vendedor/dashboard" replace /> },
+      { path: "dashboard", element: <DashboardVendedor /> },
+      { path: "catalogo", element: <VendedorCatalogo /> },
+      { path: "historial", element: <VendedorHistorial /> },
+    ],
+  },
+
+  // === ALMACEN (solo almacenista) ===
+  {
+    path: "/almacen",
+    element: (
+      <RouteGuard allowed={["almacenista"]}>
+        <AlmacenLayout />
+      </RouteGuard>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/almacen/cotizaciones" replace /> }, // default
+      { path: "cotizaciones", element: <AlmacenCotizaciones /> },
+      { path: "cotizacion/:id", element: <AlmacenDespacho /> }, // <- el id va aquí
     ],
   },
 

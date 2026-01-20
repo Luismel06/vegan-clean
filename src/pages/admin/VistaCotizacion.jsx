@@ -143,7 +143,7 @@ const EstadoBadge = styled.span`
 // Empresa (cabecera fija)
 const EMPRESA = {
   nombre: "Vega Clean",
-  rnc: "RNC: 1-00-00000-0",
+  rnc: "RNC: 132-05451-2",
   direccion: "La Vega, República Dominicana",
   telefono: "+1 (809) 365-6666",
   email: "emailcambiarlo@gmail.com",

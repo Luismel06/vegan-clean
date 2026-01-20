@@ -1,5 +1,5 @@
 // src/pages/almacen/AlmacenDespacho.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import Swal from "sweetalert2";
@@ -93,37 +93,49 @@ function safeNum(v, fb = 0) {
   return Number.isFinite(n) ? n : fb;
 }
 
-function parseScan(code) {
-  const raw = String(code || "").trim().toUpperCase();
-  if (!raw) return null;
+// barcode esperado: 2 letras + 2 números (AA12)
+function normalizeBarcode(code) {
+  return String(code || "").trim().toUpperCase();
+}
 
-  // Acepta: P-12, E-5, P12, E5, 12 (si solo número asumimos producto? no, devolvemos null)
-  const m1 = raw.match(/^([PE])[- ]?(\d+)$/);
-  if (m1) {
-    return { tipo: m1[1] === "P" ? "producto" : "equipo", item_id: Number(m1[2]) };
-  }
-
-  return null;
+function isBarcode4(code) {
+  return /^[A-Z]{2}\d{2}$/.test(code);
 }
 
 export default function AlmacenDespacho() {
-  const { id } = useParams();
+  const { id } = useParams(); // viene de /almacen/cotizacion/:id
   const navigate = useNavigate();
+  const scanRef = useRef(null);
 
   const [cot, setCot] = useState(null);
   const [detalle, setDetalle] = useState([]);
   const [scan, setScan] = useState("");
   const [saving, setSaving] = useState(false);
+
   const RPC_CONFIRM = "confirmar_despacho_y_descontar";
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+  }, [id]);
+
+  useEffect(() => {
+    // enfocamos input para que el lector dispare rápido
+    setTimeout(() => scanRef.current?.focus(), 200);
+  }, [cot?.id]);
 
   async function load() {
     try {
+      const cotId = Number(id);
+      if (!Number.isFinite(cotId)) {
+        Swal.fire("Error", "ID de cotización inválido.", "error");
+        navigate("/almacen/cotizaciones", { replace: true });
+        return;
+      }
+
       const { data: c, error: ec } = await supabase
         .from("cotizaciones")
         .select("id, estado, inventario_descontado, cliente, cliente_id, preventa_id, fecha")
-        .eq("id", Number(id))
+        .eq("id", cotId)
         .single();
 
       if (ec) throw ec;
@@ -133,10 +145,10 @@ export default function AlmacenDespacho() {
         .from("detalle_cotizacion")
         .select(`
           id, cotizacion_id, producto_id, equipo_id, cantidad, cantidad_despachada,
-          productos:producto_id ( id, nombre, marca, modelo ),
-          equipos:equipo_id ( id, nombre, marca, modelo )
+          productos:producto_id ( id, nombre, marca, modelo, codigo_barra ),
+          equipos:equipo_id ( id, nombre, marca, modelo, codigo_barra )
         `)
-        .eq("cotizacion_id", Number(id))
+        .eq("cotizacion_id", cotId)
         .order("id", { ascending: true });
 
       if (ed) throw ed;
@@ -151,6 +163,7 @@ export default function AlmacenDespacho() {
     return (detalle || []).map((r) => {
       const isProd = r.producto_id != null;
       const item = isProd ? r.productos : r.equipos;
+
       return {
         row_id: r.id,
         tipo: isProd ? "producto" : "equipo",
@@ -158,6 +171,7 @@ export default function AlmacenDespacho() {
         nombre: item?.nombre || (isProd ? `Producto #${r.producto_id}` : `Equipo #${r.equipo_id}`),
         marca: item?.marca || "-",
         modelo: item?.modelo || "-",
+        codigo_barra: normalizeBarcode(item?.codigo_barra || ""),
         cantidad: safeNum(r.cantidad, 0),
         despachada: safeNum(r.cantidad_despachada, 0),
       };
@@ -170,7 +184,10 @@ export default function AlmacenDespacho() {
 
   async function updateDespachada(rowId, newVal) {
     const v = Math.max(0, safeNum(newVal, 0));
-    setDetalle((prev) => prev.map((r) => (r.id === rowId ? { ...r, cantidad_despachada: v } : r)));
+
+    setDetalle((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, cantidad_despachada: v } : r))
+    );
 
     const { error } = await supabase
       .from("detalle_cotizacion")
@@ -185,22 +202,37 @@ export default function AlmacenDespacho() {
   }
 
   async function sumarScan() {
-    const parsed = parseScan(scan);
-    if (!parsed) {
-      Swal.fire("Código inválido", 'Usa formato "P-12" o "E-5".', "warning");
+    const code = normalizeBarcode(scan);
+
+    if (!code) return;
+
+    if (!isBarcode4(code)) {
+      Swal.fire("Código inválido", "El código debe ser 2 letras y 2 números. Ej: AA12", "warning");
+      setScan("");
+      scanRef.current?.focus();
       return;
     }
 
-    // Encuentra línea
-    const row = items.find((it) => it.tipo === parsed.tipo && it.item_id === parsed.item_id);
+    // buscar por codigo_barra dentro de ESTA cotización
+    const row = items.find((it) => it.codigo_barra === code);
+
     if (!row) {
-      Swal.fire("No coincide", "Ese código no está en esta cotización.", "info");
+      Swal.fire("No coincide", "Ese código no pertenece a esta cotización.", "info");
+      setScan("");
+      scanRef.current?.focus();
       return;
     }
 
-    const next = row.despachada + 1;
-    await updateDespachada(row.row_id, next);
+    if (row.despachada >= row.cantidad) {
+      Swal.fire("Completo", `Ya despachaste el máximo de "${row.nombre}".`, "info");
+      setScan("");
+      scanRef.current?.focus();
+      return;
+    }
+
+    await updateDespachada(row.row_id, row.despachada + 1);
     setScan("");
+    scanRef.current?.focus();
   }
 
   async function confirmarDespacho() {
@@ -229,8 +261,8 @@ export default function AlmacenDespacho() {
 
     try {
       setSaving(true);
-
       const { error } = await supabase.rpc(RPC_CONFIRM, { p_cotizacion_id: Number(id) });
+
       if (error) {
         console.error(error);
         Swal.fire("Error", error.message || "No se pudo confirmar el despacho.", "error");
@@ -249,7 +281,7 @@ export default function AlmacenDespacho() {
   return (
     <Wrap>
       <TopRow>
-        <SecondaryBtn onClick={() => navigate("/admin/almacen")}>
+        <SecondaryBtn onClick={() => navigate("/almacen/cotizaciones")}>
           <ArrowLeft size={16} /> Volver
         </SecondaryBtn>
 
@@ -258,7 +290,10 @@ export default function AlmacenDespacho() {
             <RefreshCw size={16} /> Recargar
           </SecondaryBtn>
 
-          <Btn onClick={confirmarDespacho} disabled={saving || !completo || cot.estado !== "preparacion"}>
+          <Btn
+            onClick={confirmarDespacho}
+            disabled={saving || !completo || cot.estado !== "preparacion"}
+          >
             <CheckCircle2 size={16} /> Confirmar despacho
           </Btn>
         </div>
@@ -273,9 +308,10 @@ export default function AlmacenDespacho() {
 
         <ScanBox>
           <input
+            ref={scanRef}
             value={scan}
             onChange={(e) => setScan(e.target.value)}
-            placeholder='Escanear: "P-12" o "E-5"'
+            placeholder='Escanear código de barra (Ej: AA12)'
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -301,6 +337,7 @@ export default function AlmacenDespacho() {
             <tr>
               <th>Tipo</th>
               <th>Item</th>
+              <th>Código</th>
               <th>Solicitado</th>
               <th>Despachado</th>
               <th>Acción</th>
@@ -308,7 +345,7 @@ export default function AlmacenDespacho() {
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <tr><td colSpan={5}>Sin ítems.</td></tr>
+              <tr><td colSpan={6}>Sin ítems.</td></tr>
             ) : (
               items.map((it) => (
                 <tr key={it.row_id}>
@@ -316,9 +353,10 @@ export default function AlmacenDespacho() {
                   <td>
                     <div style={{ fontWeight: 900 }}>{it.nombre}</div>
                     <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      {it.marca} · {it.modelo} · {it.tipo === "producto" ? `P-${it.item_id}` : `E-${it.item_id}`}
+                      {it.marca} · {it.modelo}
                     </div>
                   </td>
+                  <td style={{ fontWeight: 900 }}>{it.codigo_barra || "-"}</td>
                   <td>{it.cantidad}</td>
                   <td>
                     <input
@@ -330,9 +368,7 @@ export default function AlmacenDespacho() {
                     />
                   </td>
                   <td>
-                    <SecondaryBtn
-                      onClick={() => updateDespachada(it.row_id, Math.max(0, it.despachada - 1))}
-                    >
+                    <SecondaryBtn onClick={() => updateDespachada(it.row_id, Math.max(0, it.despachada - 1))}>
                       -1
                     </SecondaryBtn>
                     <SecondaryBtn onClick={() => updateDespachada(it.row_id, it.despachada + 1)}>
@@ -344,6 +380,11 @@ export default function AlmacenDespacho() {
             )}
           </tbody>
         </Table>
+
+        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.8 }}>
+          Nota: el escaneo es confiable porque valida contra el <strong>código de barra</strong> del item dentro de esta cotización.
+          Si el código no existe en la cotización, no suma.
+        </div>
       </Card>
     </Wrap>
   );

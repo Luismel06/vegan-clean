@@ -123,6 +123,11 @@ const Btn = styled.button`
   cursor: pointer;
   background: ${({ theme }) => theme.accent};
   color: #000;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const Secondary = styled(Btn)`
@@ -146,6 +151,23 @@ const Drawer = styled.div`
   align-items: center;
 `;
 
+const RemoveBtn = styled.button`
+  margin-left: 10px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
+  border-radius: 10px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 12px;
+
+  &:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+`;
+
 function formatRD(v) {
   const n = Number(v || 0);
   return `RD$ ${n.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -155,16 +177,200 @@ function cleanDoc(v) {
   return String(v || "").trim();
 }
 
+function digitsOnly(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
 function safeImg(url) {
   return url && String(url).trim() ? String(url).trim() : "/inicio.png";
 }
 
-async function getVendedorId() {
+/** ===== Generar número de caso (igual idea que Servicios) ===== */
+function generarNumeroCaso() {
+  const y = new Date().getFullYear();
+  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const ts = Date.now().toString().slice(-6);
+  return `PV-${y}-${ts}-${rand}`;
+}
+
+/** ===== Validación Cédula Dominicana ===== */
+function isValidCedulaRD(input) {
+  const ced = digitsOnly(input);
+  if (ced.length !== 11) return false;
+
+  const weights = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let sum = 0;
+
+  for (let i = 0; i < 10; i++) {
+    let p = Number(ced[i]) * weights[i];
+    if (p >= 10) p = Math.floor(p / 10) + (p % 10);
+    sum += p;
+  }
+
+  const check = (10 - (sum % 10)) % 10;
+  return check === Number(ced[10]);
+}
+
+/** ===== Validación RNC (checksum) ===== */
+function isValidRNC(input) {
+  const r = digitsOnly(input);
+  if (r.length !== 9) return false;
+
+  const weights = [7, 9, 8, 6, 5, 4, 3, 2];
+  let sum = 0;
+
+  for (let i = 0; i < 8; i++) sum += Number(r[i]) * weights[i];
+  const mod = sum % 11;
+  const check = mod === 0 ? 2 : mod === 1 ? 1 : 11 - mod;
+
+  return check === Number(r[8]);
+}
+
+async function getMyUid() {
   const { data, error } = await supabase.auth.getUser();
   if (!error && data?.user?.id) return data.user.id;
+  return localStorage.getItem("user_id") || null;
+}
 
-  const ls = localStorage.getItem("user_id");
-  return ls || null;
+function guessDocType(docRaw) {
+  const d = digitsOnly(docRaw);
+  if (d.length === 11) return "cedula";
+  if (d.length === 9) return "rnc";
+  return "unknown";
+}
+
+async function buscarClientePorDocumento(documento) {
+  const doc = cleanDoc(documento);
+  const docDigits = digitsOnly(doc);
+
+  const { data: cliCed } = await supabase
+    .from("clientes")
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .or(`cedula.eq.${doc},cedula.eq.${docDigits}`)
+    .maybeSingle();
+
+  if (cliCed) return cliCed;
+
+  const { data: cliRnc } = await supabase
+    .from("clientes")
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .or(`empresa_rnc.eq.${doc},empresa_rnc.eq.${docDigits}`)
+    .maybeSingle();
+
+  return cliRnc || null;
+}
+
+async function modalCrearCliente({ documento }) {
+  const docDigits = digitsOnly(documento);
+  const docType = guessDocType(documento);
+  const defaultTipo = docType === "rnc" ? "empresa" : "persona";
+
+  const { isConfirmed, value } = await Swal.fire({
+    title: "Crear cliente",
+    width: 820,
+    showCancelButton: true,
+    confirmButtonText: "Crear cliente",
+    cancelButtonText: "Cancelar",
+    focusConfirm: false,
+    html: `
+      <div style="text-align:left; font-size: 13px; opacity:.85; margin-bottom:10px;">
+        No existe un cliente con ese documento. Créalo para poder enviar la orden.
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Tipo</label>
+          <select id="tipo_cliente" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;">
+            <option value="persona">persona</option>
+            <option value="empresa">empresa</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Documento</label>
+          <input id="doc" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;"
+            value="${docDigits}" />
+          <div style="margin-top:6px; font-size:12px; opacity:.75;">
+            Persona: cédula (11 dígitos). Empresa: RNC (9 dígitos).
+          </div>
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Nombre / Razón social</label>
+          <input id="nombre" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" placeholder="Ej: Juan Pérez / Empresa SRL" />
+        </div>
+
+        <div>
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Teléfono</label>
+          <input id="telefono" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" placeholder="809..." />
+        </div>
+
+        <div>
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Email</label>
+          <input id="email" type="email" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" placeholder="correo@dominio.com" />
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Dirección</label>
+          <input id="direccion" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" placeholder="Dirección del cliente" />
+        </div>
+      </div>
+    `,
+    didOpen: () => {
+      const tipoEl = document.getElementById("tipo_cliente");
+      tipoEl.value = defaultTipo;
+    },
+    preConfirm: () => {
+      const tipo_cliente = document.getElementById("tipo_cliente").value;
+      const doc = digitsOnly(document.getElementById("doc").value);
+      const nombre = cleanDoc(document.getElementById("nombre").value);
+      const telefono = cleanDoc(document.getElementById("telefono").value);
+      const email = cleanDoc(document.getElementById("email").value);
+      const direccion = cleanDoc(document.getElementById("direccion").value);
+
+      if (!nombre) {
+        Swal.showValidationMessage("Debes escribir el nombre / razón social.");
+        return null;
+      }
+
+      if (tipo_cliente === "persona") {
+        if (!isValidCedulaRD(doc)) {
+          Swal.showValidationMessage("Cédula inválida. Debe ser de 11 dígitos y válida.");
+          return null;
+        }
+      } else {
+        if (!isValidRNC(doc)) {
+          Swal.showValidationMessage("RNC inválido. Debe ser de 9 dígitos y válido.");
+          return null;
+        }
+      }
+
+      return { tipo_cliente, doc, nombre, telefono, email, direccion };
+    },
+  });
+
+  if (!isConfirmed || !value) return null;
+
+  const payload = {
+    tipo_cliente: value.tipo_cliente,
+    nombre: value.nombre,
+    cedula: value.tipo_cliente === "persona" ? value.doc : null,
+    empresa_rnc: value.tipo_cliente === "empresa" ? value.doc : null,
+    telefono: value.telefono || null,
+    email: value.email || null,
+    direccion: value.direccion || null,
+  };
+
+  const onConflict = value.tipo_cliente === "persona" ? "cedula" : "empresa_rnc";
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .upsert(payload, { onConflict })
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export default function VendedorCatalogo() {
@@ -193,14 +399,12 @@ export default function VendedorCatalogo() {
         .from("productos")
         .select("id, nombre, marca, modelo, categoria, precio, imagen_url")
         .order("id", { ascending: false });
-
       if (e1) throw e1;
 
       const { data: eqs, error: e2 } = await supabase
         .from("equipos")
         .select("id, nombre, marca, modelo, categoria, precio, imagen_url")
         .order("id", { ascending: false });
-
       if (e2) throw e2;
 
       setProductos(prods || []);
@@ -259,70 +463,83 @@ export default function VendedorCatalogo() {
     [cart]
   );
 
+  async function pedirDocumentoConValidacion() {
+    const { isConfirmed, value } = await Swal.fire({
+      title: "Documento del cliente",
+      input: "text",
+      inputLabel: "Escribe la cédula (11 dígitos) o el RNC (9 dígitos)",
+      inputPlaceholder: "Ej: 40212312312 o 101123456",
+      showCancelButton: true,
+      confirmButtonText: "Continuar",
+      cancelButtonText: "Cancelar",
+      preConfirm: (v) => {
+        const raw = cleanDoc(v);
+        const d = digitsOnly(raw);
+        const t = guessDocType(raw);
+
+        if (!d) {
+          Swal.showValidationMessage("Debes escribir la cédula o RNC.");
+          return null;
+        }
+        if (t === "cedula" && !isValidCedulaRD(d)) {
+          Swal.showValidationMessage("Cédula inválida. Verifica los 11 dígitos.");
+          return null;
+        }
+        if (t === "rnc" && !isValidRNC(d)) {
+          Swal.showValidationMessage("RNC inválido. Verifica los 9 dígitos.");
+          return null;
+        }
+        if (t === "unknown") {
+          Swal.showValidationMessage("Documento inválido. Cédula=11 dígitos, RNC=9 dígitos.");
+          return null;
+        }
+
+        return d; // solo dígitos
+      },
+    });
+
+    if (!isConfirmed) return null;
+    return value || null;
+  }
+
   async function enviarOrden() {
     if (!cart.length) {
       Swal.fire("Carrito vacío", "Agrega productos/equipos antes de enviar.", "warning");
       return;
     }
 
-    const vendedorId = await getVendedorId();
-    if (!vendedorId) {
-      Swal.fire("Sesión", "No se detectó el vendedor (user_id). Inicia sesión nuevamente.", "warning");
-      return;
-    }
-
-    const { value: doc } = await Swal.fire({
-      title: "Documento del cliente",
-      input: "text",
-      inputLabel: "Escribe la cédula (persona) o el RNC (empresa)",
-      inputPlaceholder: "Ej: 40212312312 o 1-01-12345-6",
-      showCancelButton: true,
-      confirmButtonText: "Buscar cliente",
-      cancelButtonText: "Cancelar",
-      inputValidator: (v) => (!cleanDoc(v) ? "Debes escribir la cédula o RNC." : null),
-    });
-    if (!doc) return;
-
-    const documento = cleanDoc(doc);
+    const documento = await pedirDocumentoConValidacion();
+    if (!documento) return;
 
     try {
-      const { data: cliByCed } = await supabase
-        .from("clientes")
-        .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
-        .eq("cedula", documento)
-        .maybeSingle();
+      // 1) Buscar cliente
+      let cliente = await buscarClientePorDocumento(documento);
 
-      const cliente = cliByCed
-        ? cliByCed
-        : (
-            await supabase
-              .from("clientes")
-              .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
-              .eq("empresa_rnc", documento)
-              .maybeSingle()
-          ).data;
-
+      // 2) Si no existe, crear cliente
       if (!cliente) {
-        Swal.fire(
-          "Cliente no encontrado",
-          "No existe un cliente con esa cédula/RNC. Primero debe registrarse en el formulario del cliente.",
-          "error"
-        );
+        cliente = await modalCrearCliente({ documento });
+        if (!cliente) return;
+      }
+
+      // 3) Crear preventa vinculada + vendedor_id + numero_caso
+      const myUid = await getMyUid();
+      if (!myUid) {
+        Swal.fire("Sesión", "No se detectó usuario autenticado. Inicia sesión.", "warning");
         return;
       }
 
       const tipoCliente = cliente.tipo_cliente || "persona";
+      const numero_caso = generarNumeroCaso();
 
       const payloadPreventa = {
-        vendedor_id: vendedorId, // ✅ CLAVE PARA FILTRAR
+        numero_caso,              // ✅ NUEVO
+        vendedor_id: myUid,       // ✅ CAMBIO: vendedor_id (no vendedor_uid)
         cliente_id: cliente.id,
         tipo_cliente: tipoCliente,
         cliente: cliente.nombre || "Cliente",
-
-        cedula: tipoCliente === "persona" ? cliente.cedula : null,
+        cedula: tipoCliente === "persona" ? (cliente.cedula || documento) : null,
         empresa_nombre: tipoCliente === "empresa" ? cliente.nombre : null,
-        empresa_rnc: tipoCliente === "empresa" ? cliente.empresa_rnc : null,
-
+        empresa_rnc: tipoCliente === "empresa" ? (cliente.empresa_rnc || documento) : null,
         telefono: cliente.telefono,
         email: cliente.email,
         direccion: cliente.direccion,
@@ -332,13 +549,14 @@ export default function VendedorCatalogo() {
       const { data: prev, error: ePrev } = await supabase
         .from("preventas")
         .insert(payloadPreventa)
-        .select("id")
+        .select("id, numero_caso")
         .single();
 
       if (ePrev) throw ePrev;
 
       const preventaId = prev.id;
 
+      // 4) Insertar detalle_preventa
       const detalles = cart.map((it) => ({
         preventa_id: preventaId,
         cantidad: Number(it.cantidad || 1),
@@ -349,11 +567,76 @@ export default function VendedorCatalogo() {
       const { error: eDet } = await supabase.from("detalle_preventa").insert(detalles);
       if (eDet) throw eDet;
 
-      Swal.fire("Orden enviada", `Preventa creada (#${preventaId}).`, "success");
+      Swal.fire(
+        "Orden enviada",
+        `Preventa creada.\n#Caso: ${prev.numero_caso || numero_caso}\nID: #${preventaId}`,
+        "success"
+      );
+
       clearCart();
       setCart([]);
     } catch (e) {
       console.error(e);
+
+      // Si choca con el unique de numero_caso (muy raro), reintenta 1 vez
+      const msg = String(e?.message || "");
+      if (msg.toLowerCase().includes("preventas_numero_caso_uq")) {
+        try {
+          const documento2 = documento;
+          let cliente2 = await buscarClientePorDocumento(documento2);
+          if (!cliente2) cliente2 = await modalCrearCliente({ documento: documento2 });
+          if (!cliente2) return;
+
+          const myUid2 = await getMyUid();
+          const numero_caso2 = generarNumeroCaso();
+
+          const payload2 = {
+            numero_caso: numero_caso2,
+            vendedor_id: myUid2,
+            cliente_id: cliente2.id,
+            tipo_cliente: cliente2.tipo_cliente || "persona",
+            cliente: cliente2.nombre || "Cliente",
+            cedula: (cliente2.tipo_cliente || "persona") === "persona" ? (cliente2.cedula || documento2) : null,
+            empresa_nombre: (cliente2.tipo_cliente || "persona") === "empresa" ? cliente2.nombre : null,
+            empresa_rnc: (cliente2.tipo_cliente || "persona") === "empresa" ? (cliente2.empresa_rnc || documento2) : null,
+            telefono: cliente2.telefono,
+            email: cliente2.email,
+            direccion: cliente2.direccion,
+            estado: "enviada",
+          };
+
+          const { data: prev2, error: ePrev2 } = await supabase
+            .from("preventas")
+            .insert(payload2)
+            .select("id, numero_caso")
+            .single();
+          if (ePrev2) throw ePrev2;
+
+          const preventaId2 = prev2.id;
+
+          const detalles2 = cart.map((it) => ({
+            preventa_id: preventaId2,
+            cantidad: Number(it.cantidad || 1),
+            producto_id: it.tipo === "producto" ? it.item_id : null,
+            equipo_id: it.tipo === "equipo" ? it.item_id : null,
+          }));
+
+          const { error: eDet2 } = await supabase.from("detalle_preventa").insert(detalles2);
+          if (eDet2) throw eDet2;
+
+          Swal.fire(
+            "Orden enviada",
+            `Preventa creada.\n#Caso: ${prev2.numero_caso}\nID: #${preventaId2}`,
+            "success"
+          );
+          clearCart();
+          setCart([]);
+          return;
+        } catch (e2) {
+          console.error(e2);
+        }
+      }
+
       Swal.fire("Error", "No se pudo enviar la orden.", "error");
     }
   }
@@ -363,7 +646,7 @@ export default function VendedorCatalogo() {
       <TopBar>
         <div>
           <Title>Catálogo vendedor</Title>
-          <Sub>Precios fijos. Agrega ítems al carrito y envía la orden vinculada a cliente.</Sub>
+          <Sub>Precios fijos. Agrega ítems al carrito y envía la orden vinculada a cliente (cédula/RNC).</Sub>
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -440,21 +723,16 @@ export default function VendedorCatalogo() {
 
           {cart.length > 0 ? (
             <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>
-              {cart.slice(0, 3).map((x, idx) => (
-                <div key={idx}>
+              {cart.slice(0, 4).map((x, idx) => (
+                <div key={idx} style={{ marginTop: 6 }}>
                   • {x.tipo} {x.nombre} × {x.cantidad}{" "}
                   <span style={{ opacity: 0.7 }}>
                     ({x.tipo === "producto" ? `P-${x.item_id}` : `E-${x.item_id}`})
                   </span>
-                  <button
-                    style={{ marginLeft: 8, cursor: "pointer" }}
-                    onClick={() => removeFromCart(x.tipo, x.item_id)}
-                  >
-                    quitar
-                  </button>
+                  <RemoveBtn onClick={() => removeFromCart(x.tipo, x.item_id)}>Quitar</RemoveBtn>
                 </div>
               ))}
-              {cart.length > 3 ? <div>… y {cart.length - 3} más</div> : null}
+              {cart.length > 4 ? <div>… y {cart.length - 4} más</div> : null}
             </div>
           ) : null}
         </div>

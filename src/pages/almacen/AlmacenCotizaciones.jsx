@@ -49,6 +49,11 @@ const Btn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const Table = styled.table`
@@ -132,7 +137,7 @@ export default function AlmacenCotizaciones() {
         <div>
           <h2 style={{ margin: 0, color: "#00bcd4" }}>Almacén — Preparación</h2>
           <div style={{ opacity: 0.8, fontSize: 13 }}>
-            Aquí aparecen las cotizaciones aceptadas comercialmente (sin descuento de inventario aún).
+            Cotizaciones aceptadas comercialmente (inventario aún no descontado).
           </div>
         </div>
 
@@ -171,7 +176,7 @@ export default function AlmacenCotizaciones() {
                 <td>RD${Number(c.total || 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}</td>
                 <td>{c.fecha ? new Date(c.fecha).toLocaleString() : "-"}</td>
                 <td>
-                  <Btn onClick={() => navigate(`/admin/almacen/cotizacion/${c.id}`)}>
+                  <Btn onClick={() => navigate(`/almacen/cotizacion/${c.id}`)}>
                     <Eye size={16} /> Despachar
                   </Btn>
                 </td>

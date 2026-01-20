@@ -1,3 +1,4 @@
+// src/pages/admin/Productos.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
@@ -139,6 +140,7 @@ const SearchBox = styled.div`
     opacity: 0.8;
   }
 `;
+
 const FiltersRow = styled.div`
   display: grid;
   grid-template-columns: 1.4fr repeat(4, minmax(160px, 1fr));
@@ -180,7 +182,7 @@ const TableWrapper = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  min-width: 1100px;
+  min-width: 1200px;
 
   th,
   td {
@@ -320,7 +322,7 @@ async function uploadImageToBucket(bucket, file) {
   });
 
   if (error) throw error;
-  return filePath; // guardamos PATH, no URL
+  return filePath;
 }
 
 /* ==================== COMPONENTE ==================== */
@@ -335,7 +337,6 @@ export default function Productos() {
   const [fMarca, setFMarca] = useState("all");
   const [fModelo, setFModelo] = useState("all");
 
-
   const [categoria, setCategoria] = useState("");
   const [marca, setMarca] = useState("");
   const [modelo, setModelo] = useState("");
@@ -349,81 +350,62 @@ export default function Productos() {
   });
 
   const [imageFile, setImageFile] = useState(null);
-  const [imagePath, setImagePath] = useState(""); // lo que está en BD
+  const [imagePath, setImagePath] = useState("");
   const [imagePreview, setImagePreview] = useState("");
 
-const filtered = useMemo(() => {
-  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
 
-  return (productos || []).filter((p) => {
-    // 1) filtro texto (como ya lo haces)
-    const nombre = (p.nombre || "").toLowerCase();
-    const proveedor = (p.proveedor || "").toLowerCase();
-    const categoriaP = (p.categoria || "").toLowerCase();
-    const marcaP = (p.marca || "").toLowerCase();
-    const modeloP = (p.modelo || "").toLowerCase();
+    return (productos || []).filter((p) => {
+      const nombre = (p.nombre || "").toLowerCase();
+      const proveedor = (p.proveedor || "").toLowerCase();
+      const categoriaP = (p.categoria || "").toLowerCase();
+      const marcaP = (p.marca || "").toLowerCase();
+      const modeloP = (p.modelo || "").toLowerCase();
 
-    const matchText =
-      !q ||
-      nombre.includes(q) ||
-      proveedor.includes(q) ||
-      categoriaP.includes(q) ||
-      marcaP.includes(q) ||
-      modeloP.includes(q);
+      const matchText =
+        !q ||
+        nombre.includes(q) ||
+        proveedor.includes(q) ||
+        categoriaP.includes(q) ||
+        marcaP.includes(q) ||
+        modeloP.includes(q);
 
-    if (!matchText) return false;
+      if (!matchText) return false;
 
-    // 2) filtros select (exact match)
-    const matchProveedor =
-      fProveedor === "all" || (p.proveedor || "").trim() === fProveedor;
+      const matchProveedor = fProveedor === "all" || (p.proveedor || "").trim() === fProveedor;
+      const matchCategoria = fCategoria === "all" || (p.categoria || "").trim() === fCategoria;
+      const matchMarca = fMarca === "all" || (p.marca || "").trim() === fMarca;
+      const matchModelo = fModelo === "all" || (p.modelo || "").trim() === fModelo;
 
-    const matchCategoria =
-      fCategoria === "all" || (p.categoria || "").trim() === fCategoria;
-
-    const matchMarca = fMarca === "all" || (p.marca || "").trim() === fMarca;
-
-    const matchModelo =
-      fModelo === "all" || (p.modelo || "").trim() === fModelo;
-
-    return matchProveedor && matchCategoria && matchMarca && matchModelo;
-  });
-}, [query, productos, fProveedor, fCategoria, fMarca, fModelo]);
+      return matchProveedor && matchCategoria && matchMarca && matchModelo;
+    });
+  }, [query, productos, fProveedor, fCategoria, fMarca, fModelo]);
 
   const proveedores = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.proveedor || "").trim()).filter(Boolean));
-  return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+    const set = new Set((productos || []).map((p) => (p.proveedor || "").trim()).filter(Boolean));
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [productos]);
 
-const categorias = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.categoria || "").trim()).filter(Boolean));
-  return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+  const categorias = useMemo(() => {
+    const set = new Set((productos || []).map((p) => (p.categoria || "").trim()).filter(Boolean));
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [productos]);
 
-const marcas = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.marca || "").trim()).filter(Boolean));
-  return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+  const marcas = useMemo(() => {
+    const set = new Set((productos || []).map((p) => (p.marca || "").trim()).filter(Boolean));
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [productos]);
 
-const modelos = useMemo(() => {
-  const set = new Set((productos || []).map((p) => (p.modelo || "").trim()).filter(Boolean));
-  return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
-}, [productos]);
+  const modelos = useMemo(() => {
+    const set = new Set((productos || []).map((p) => (p.modelo || "").trim()).filter(Boolean));
+    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [productos]);
 
-
-  /* === MÉTRICAS === */
   const totalProductos = productos.length;
-  const valorInventario = productos.reduce(
-    (acc, p) => acc + (p.cantidad || 0) * (p.precio || 0),
-    0
-  );
-  const productoMasCaro = productos.reduce(
-    (max, p) => (p.precio > (max?.precio || 0) ? p : max),
-    null
-  );
-  const productoMenorStock = productos.reduce(
-    (min, p) => (p.cantidad < (min?.cantidad || Infinity) ? p : min),
-    null
-  );
+  const valorInventario = productos.reduce((acc, p) => acc + (p.cantidad || 0) * (p.precio || 0), 0);
+  const productoMasCaro = productos.reduce((max, p) => (p.precio > (max?.precio || 0) ? p : max), null);
+  const productoMenorStock = productos.reduce((min, p) => (p.cantidad < (min?.cantidad || Infinity) ? p : min), null);
 
   useEffect(() => {
     fetchProductos();
@@ -432,11 +414,7 @@ const modelos = useMemo(() => {
   async function fetchProductos() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("productos")
-        .select("*")
-        .order("id", { ascending: false });
-
+      const { data, error } = await supabase.from("productos").select("*").order("id", { ascending: false });
       if (error) throw error;
       setProductos(data ?? []);
     } catch (err) {
@@ -444,9 +422,7 @@ const modelos = useMemo(() => {
       Swal.fire({
         icon: "error",
         title: "No se pudieron cargar los productos",
-        text:
-          err?.message ||
-          "Verifica RLS/policies o que tu app apunte al mismo proyecto de Supabase.",
+        text: err?.message || "Verifica RLS/policies o que tu app apunte al mismo proyecto de Supabase.",
         confirmButtonColor: "#00c27a",
       });
     } finally {
@@ -455,13 +431,7 @@ const modelos = useMemo(() => {
   }
 
   function resetForm() {
-    setForm({
-      nombre: "",
-      proveedor: "",
-      cantidad: "",
-      precio: "",
-      descripcion: "",
-    });
+    setForm({ nombre: "", proveedor: "", cantidad: "", precio: "", descripcion: "" });
     setCategoria("");
     setMarca("");
     setModelo("");
@@ -494,19 +464,12 @@ const modelos = useMemo(() => {
     e.preventDefault();
     const err = validate(form);
     if (err) {
-      return Swal.fire({
-        icon: "warning",
-        title: "Validación",
-        text: err,
-        confirmButtonColor: "#00c27a",
-      });
+      return Swal.fire({ icon: "warning", title: "Validación", text: err, confirmButtonColor: "#00c27a" });
     }
 
     try {
       let uploadedPath = null;
-      if (imageFile) {
-        uploadedPath = await uploadImageToBucket("productos", imageFile);
-      }
+      if (imageFile) uploadedPath = await uploadImageToBucket("productos", imageFile);
 
       const payload = {
         nombre: form.nombre,
@@ -518,33 +481,19 @@ const modelos = useMemo(() => {
         modelo: modelo || null,
         descripcion: form.descripcion || null,
         imagen_url: uploadedPath || null,
+        // ✅ NO mandamos codigo_barra, lo genera el trigger
       };
 
-      const { data, error } = await supabase
-        .from("productos")
-        .insert([payload])
-        .select()
-        .single();
-
+      const { data, error } = await supabase.from("productos").insert([payload]).select().single();
       if (error) throw error;
 
       setProductos((prev) => [data, ...prev]);
       resetForm();
 
-      Swal.fire({
-        icon: "success",
-        title: "Producto agregado",
-        timer: 1300,
-        showConfirmButton: false,
-      });
+      Swal.fire({ icon: "success", title: "Producto agregado", timer: 1300, showConfirmButton: false });
     } catch (err2) {
       console.error("onCreate error:", err2);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: err2?.message || "No se pudo crear el producto.",
-        confirmButtonColor: "#00c27a",
-      });
+      Swal.fire({ icon: "error", title: "Error", text: err2?.message || "No se pudo crear el producto.", confirmButtonColor: "#00c27a" });
     }
   }
 
@@ -552,19 +501,12 @@ const modelos = useMemo(() => {
     e.preventDefault();
     const err = validate(form);
     if (err) {
-      return Swal.fire({
-        icon: "warning",
-        title: "Validación",
-        text: err,
-        confirmButtonColor: "#00c27a",
-      });
+      return Swal.fire({ icon: "warning", title: "Validación", text: err, confirmButtonColor: "#00c27a" });
     }
 
     try {
       let uploadedPath = imagePath || null;
-      if (imageFile) {
-        uploadedPath = await uploadImageToBucket("productos", imageFile);
-      }
+      if (imageFile) uploadedPath = await uploadImageToBucket("productos", imageFile);
 
       const payload = {
         nombre: form.nombre,
@@ -576,34 +518,19 @@ const modelos = useMemo(() => {
         modelo: modelo || null,
         descripcion: form.descripcion || null,
         imagen_url: uploadedPath || null,
+        // ✅ no tocamos codigo_barra en update
       };
 
-      const { data, error } = await supabase
-        .from("productos")
-        .update(payload)
-        .eq("id", editingId)
-        .select()
-        .single();
-
+      const { data, error } = await supabase.from("productos").update(payload).eq("id", editingId).select().single();
       if (error) throw error;
 
       setProductos((prev) => prev.map((p) => (p.id === editingId ? data : p)));
       resetForm();
 
-      Swal.fire({
-        icon: "success",
-        title: "Producto actualizado",
-        timer: 1300,
-        showConfirmButton: false,
-      });
+      Swal.fire({ icon: "success", title: "Producto actualizado", timer: 1300, showConfirmButton: false });
     } catch (err2) {
       console.error("onUpdate error:", err2);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: err2?.message || "No se pudo actualizar el producto.",
-        confirmButtonColor: "#00c27a",
-      });
+      Swal.fire({ icon: "error", title: "Error", text: err2?.message || "No se pudo actualizar el producto.", confirmButtonColor: "#00c27a" });
     }
   }
 
@@ -625,21 +552,10 @@ const modelos = useMemo(() => {
       if (error) throw error;
 
       setProductos((prev) => prev.filter((p) => p.id !== id));
-
-      Swal.fire({
-        icon: "success",
-        title: "Producto eliminado",
-        timer: 1100,
-        showConfirmButton: false,
-      });
+      Swal.fire({ icon: "success", title: "Producto eliminado", timer: 1100, showConfirmButton: false });
     } catch (err2) {
       console.error("onDelete error:", err2);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: err2?.message || "No se pudo eliminar el producto.",
-        confirmButtonColor: "#00c27a",
-      });
+      Swal.fire({ icon: "error", title: "Error", text: err2?.message || "No se pudo eliminar el producto.", confirmButtonColor: "#00c27a" });
     }
   }
 
@@ -660,12 +576,9 @@ const modelos = useMemo(() => {
         </Actions>
       </Header>
 
-      {/* === MÉTRICAS === */}
       <MetricsGrid>
         <MetricCard>
-          <IconWrap>
-            <Package size={22} />
-          </IconWrap>
+          <IconWrap><Package size={22} /></IconWrap>
           <MetricInfo>
             <MetricValue>{totalProductos}</MetricValue>
             <MetricLabel>Total de productos</MetricLabel>
@@ -673,15 +586,10 @@ const modelos = useMemo(() => {
         </MetricCard>
 
         <MetricCard>
-          <IconWrap>
-            <DollarSign size={22} />
-          </IconWrap>
+          <IconWrap><DollarSign size={22} /></IconWrap>
           <MetricInfo>
             <MetricValue>
-              RD$
-              {valorInventario.toLocaleString("es-DO", {
-                minimumFractionDigits: 2,
-              })}
+              RD${valorInventario.toLocaleString("es-DO", { minimumFractionDigits: 2 })}
             </MetricValue>
             <MetricLabel>Valor total inventario</MetricLabel>
           </MetricInfo>
@@ -689,29 +597,20 @@ const modelos = useMemo(() => {
 
         {productoMenorStock && (
           <MetricCard>
-            <IconWrap>
-              <AlertTriangle size={22} />
-            </IconWrap>
+            <IconWrap><AlertTriangle size={22} /></IconWrap>
             <MetricInfo>
               <MetricValue>{productoMenorStock.nombre}</MetricValue>
-              <MetricLabel>
-                Menor stock ({productoMenorStock.cantidad})
-              </MetricLabel>
+              <MetricLabel>Menor stock ({productoMenorStock.cantidad})</MetricLabel>
             </MetricInfo>
           </MetricCard>
         )}
 
         {productoMasCaro && (
           <MetricCard>
-            <IconWrap>
-              <TrendingUp size={22} />
-            </IconWrap>
+            <IconWrap><TrendingUp size={22} /></IconWrap>
             <MetricInfo>
               <MetricValue>
-                RD$
-                {Number(productoMasCaro.precio || 0).toLocaleString("es-DO", {
-                  minimumFractionDigits: 2,
-                })}
+                RD${Number(productoMasCaro.precio || 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}
               </MetricValue>
               <MetricLabel>Más caro ({productoMasCaro.nombre})</MetricLabel>
             </MetricInfo>
@@ -719,152 +618,96 @@ const modelos = useMemo(() => {
         )}
       </MetricsGrid>
 
-      {/* === BUSCADOR === */}
       <FiltersRow>
-  <SearchBox style={{ marginBottom: 0, minWidth: "unset" }}>
-    <Search size={18} />
-    <input
-      placeholder="Buscar..."
-      value={query}
-      onChange={(e) => setQuery(e.target.value)}
-    />
-  </SearchBox>
+        <SearchBox style={{ marginBottom: 0, minWidth: "unset" }}>
+          <Search size={18} />
+          <input placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        </SearchBox>
 
-  <Select value={fProveedor} onChange={(e) => setFProveedor(e.target.value)}>
-    {proveedores.map((v) => (
-      <option key={v} value={v}>
-        {v === "all" ? "Todos los proveedores" : v}
-      </option>
-    ))}
-  </Select>
+        <Select value={fProveedor} onChange={(e) => setFProveedor(e.target.value)}>
+          {proveedores.map((v) => (
+            <option key={v} value={v}>{v === "all" ? "Todos los proveedores" : v}</option>
+          ))}
+        </Select>
 
-  <Select value={fCategoria} onChange={(e) => setFCategoria(e.target.value)}>
-    {categorias.map((v) => (
-      <option key={v} value={v}>
-        {v === "all" ? "Todas las categorías" : v}
-      </option>
-    ))}
-  </Select>
+        <Select value={fCategoria} onChange={(e) => setFCategoria(e.target.value)}>
+          {categorias.map((v) => (
+            <option key={v} value={v}>{v === "all" ? "Todas las categorías" : v}</option>
+          ))}
+        </Select>
 
-  <Select value={fMarca} onChange={(e) => setFMarca(e.target.value)}>
-    {marcas.map((v) => (
-      <option key={v} value={v}>
-        {v === "all" ? "Todas las marcas" : v}
-      </option>
-    ))}
-  </Select>
+        <Select value={fMarca} onChange={(e) => setFMarca(e.target.value)}>
+          {marcas.map((v) => (
+            <option key={v} value={v}>{v === "all" ? "Todas las marcas" : v}</option>
+          ))}
+        </Select>
 
-  <Select value={fModelo} onChange={(e) => setFModelo(e.target.value)}>
-    {modelos.map((v) => (
-      <option key={v} value={v}>
-        {v === "all" ? "Todos los modelos" : v}
-      </option>
-    ))}
-  </Select>
+        <Select value={fModelo} onChange={(e) => setFModelo(e.target.value)}>
+          {modelos.map((v) => (
+            <option key={v} value={v}>{v === "all" ? "Todos los modelos" : v}</option>
+          ))}
+        </Select>
 
-  <ClearFiltersBtn
-    type="button"
-    onClick={() => {
-      setQuery("");
-      setFProveedor("all");
-      setFCategoria("all");
-      setFMarca("all");
-      setFModelo("all");
-    }}
-  >
-    Limpiar
-  </ClearFiltersBtn>
-</FiltersRow>
+        <ClearFiltersBtn
+          type="button"
+          onClick={() => {
+            setQuery("");
+            setFProveedor("all");
+            setFCategoria("all");
+            setFMarca("all");
+            setFModelo("all");
+          }}
+        >
+          Limpiar
+        </ClearFiltersBtn>
+      </FiltersRow>
 
-
-      {/* === FORMULARIO === */}
       {(adding || editingId !== null) && (
         <Form onSubmit={editingId ? onUpdate : onCreate}>
           <Field>
             <Label>Nombre</Label>
-            <Input
-              placeholder="Nombre del producto"
-              value={form.nombre}
-              onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-            />
+            <Input placeholder="Nombre del producto" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
           </Field>
 
           <Field>
             <Label>Proveedor</Label>
-            <Input
-              placeholder="Proveedor"
-              value={form.proveedor}
-              onChange={(e) => setForm({ ...form, proveedor: e.target.value })}
-            />
+            <Input placeholder="Proveedor" value={form.proveedor} onChange={(e) => setForm({ ...form, proveedor: e.target.value })} />
           </Field>
 
           <Field>
             <Label>Cantidad</Label>
-            <Input
-              placeholder="Cantidad"
-              type="number"
-              value={form.cantidad}
-              onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
-            />
+            <Input placeholder="Cantidad" type="number" value={form.cantidad} onChange={(e) => setForm({ ...form, cantidad: e.target.value })} />
           </Field>
 
           <Field>
             <Label>Precio (RD$)</Label>
-            <Input
-              placeholder="Precio (RD$)"
-              type="number"
-              step="0.01"
-              value={form.precio}
-              onChange={(e) => setForm({ ...form, precio: e.target.value })}
-            />
+            <Input placeholder="Precio (RD$)" type="number" step="0.01" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} />
           </Field>
 
           <Field>
             <Label>Categoría</Label>
-            <Input
-              type="text"
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
-              placeholder="Ej: Zafacones, Detergentes..."
-            />
+            <Input type="text" value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Ej: Zafacones, Detergentes..." />
           </Field>
 
           <Field>
             <Label>Marca</Label>
-            <Input
-              type="text"
-              value={marca}
-              onChange={(e) => setMarca(e.target.value)}
-              placeholder="Ej: Vega Clean..."
-            />
+            <Input type="text" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="Ej: Vega Clean..." />
           </Field>
 
           <Field>
             <Label>Modelo</Label>
-            <Input
-              type="text"
-              value={modelo}
-              onChange={(e) => setModelo(e.target.value)}
-              placeholder="Ej: Mediano..."
-            />
+            <Input type="text" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ej: Mediano..." />
           </Field>
 
           <Field style={{ gridColumn: "1 / -1" }}>
             <Label>Descripción</Label>
-            <TextArea
-              placeholder="Descripción del producto..."
-              value={form.descripcion}
-              onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-            />
+            <TextArea placeholder="Descripción del producto..." value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
           </Field>
 
           <Field style={{ gridColumn: "1 / -1" }}>
             <Label>Imagen</Label>
             <ImgRow>
-              <SecondaryButton
-                type="button"
-                onClick={() => document.getElementById("producto_img_input")?.click()}
-              >
+              <SecondaryButton type="button" onClick={() => document.getElementById("producto_img_input")?.click()}>
                 <ImageIcon size={18} /> Seleccionar imagen
               </SecondaryButton>
 
@@ -877,10 +720,7 @@ const modelos = useMemo(() => {
               />
 
               {(imagePreview || imagePath) && (
-                <ImgPreview
-                  src={imagePreview || getPublicImageUrl("productos", imagePath)}
-                  alt="preview"
-                />
+                <ImgPreview src={imagePreview || getPublicImageUrl("productos", imagePath)} alt="preview" />
               )}
             </ImgRow>
           </Field>
@@ -896,7 +736,6 @@ const modelos = useMemo(() => {
         </Form>
       )}
 
-      {/* === TABLA === */}
       <TableWrapper>
         {loading ? (
           <Empty>Cargando productos...</Empty>
@@ -907,6 +746,7 @@ const modelos = useMemo(() => {
             <thead>
               <tr>
                 <th>Imagen</th>
+                <th>Código</th>
                 <th>Nombre</th>
                 <th>Proveedor</th>
                 <th>Categoría</th>
@@ -923,13 +763,15 @@ const modelos = useMemo(() => {
                 <tr key={p.id}>
                   <td>
                     <ImgPreview
-                      src={
-                        getPublicImageUrl("productos", p.imagen_url) ||
-                        "/placeholder-producto.png"
-                      }
+                      src={getPublicImageUrl("productos", p.imagen_url) || "/placeholder-producto.png"}
                       alt={p.nombre || "producto"}
                     />
                   </td>
+
+                  <td style={{ fontWeight: 900 }}>
+                    {p.codigo_barra || "-"}
+                  </td>
+
                   <td>
                     <div style={{ fontWeight: 800 }}>{p.nombre}</div>
                     {p.descripcion && (
@@ -938,17 +780,16 @@ const modelos = useMemo(() => {
                       </div>
                     )}
                   </td>
+
                   <td>{p.proveedor}</td>
                   <td>{p.categoria || "-"}</td>
                   <td>{p.marca || "-"}</td>
                   <td>{p.modelo || "-"}</td>
                   <td>{p.cantidad}</td>
                   <td>
-                    RD$
-                    {Number(p.precio || 0).toLocaleString("es-DO", {
-                      minimumFractionDigits: 2,
-                    })}
+                    RD${Number(p.precio || 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}
                   </td>
+
                   <td>
                     <RowActions>
                       <IconAction
@@ -968,9 +809,7 @@ const modelos = useMemo(() => {
 
                           setImageFile(null);
                           setImagePath(p.imagen_url || "");
-                          setImagePreview(
-                            p.imagen_url ? getPublicImageUrl("productos", p.imagen_url) : ""
-                          );
+                          setImagePreview(p.imagen_url ? getPublicImageUrl("productos", p.imagen_url) : "");
                         }}
                       >
                         <Pencil size={16} /> Editar
