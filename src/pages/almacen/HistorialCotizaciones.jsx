@@ -1,4 +1,4 @@
-// src/pages/almacen/AlmacenCotizaciones.jsx
+// src/pages/almacen/HistorialCotizaciones.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
@@ -58,7 +58,8 @@ const Table = styled.table`
   border-radius: 10px;
   overflow: hidden;
 
-  th, td {
+  th,
+  td {
     padding: 0.9rem 1rem;
     border-bottom: 1px solid ${({ theme }) => theme.border};
     text-align: left;
@@ -89,7 +90,7 @@ function formatRD(v) {
   })}`;
 }
 
-export default function AlmacenCotizaciones() {
+export default function HistorialCotizaciones() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
@@ -108,14 +109,14 @@ export default function AlmacenCotizaciones() {
           id, fecha, estado, total, preventa_id, cliente, cliente_id, inventario_descontado,
           cliente_ref:clientes!cotizaciones_cliente_id_fkey ( id, tipo_cliente, nombre, cedula, empresa_rnc )
         `)
-        .eq("estado", "preparacion")
+        .eq("estado", "despachada")
         .order("id", { ascending: false });
 
       if (error) throw error;
       setRows(data || []);
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No se pudieron cargar cotizaciones en preparación.", "error");
+      Swal.fire("Error", "No se pudieron cargar cotizaciones despachadas.", "error");
     } finally {
       setLoading(false);
     }
@@ -124,13 +125,22 @@ export default function AlmacenCotizaciones() {
   const filtered = useMemo(() => {
     const qq = safeText(q);
     if (!qq) return rows;
+
     return (rows || []).filter((r) => {
       const c = r.cliente_ref || {};
       const hay = [
-        r.id, r.estado, r.preventa_id, r.total,
+        r.id,
+        r.estado,
+        r.preventa_id,
+        r.total,
         r.cliente,
-        c.nombre, c.cedula, c.empresa_rnc,
-      ].map(safeText).join(" | ");
+        c.nombre,
+        c.cedula,
+        c.empresa_rnc,
+      ]
+        .map(safeText)
+        .join(" | ");
+
       return hay.includes(qq);
     });
   }, [rows, q]);
@@ -139,9 +149,9 @@ export default function AlmacenCotizaciones() {
     <Wrap>
       <Top>
         <div>
-          <h2 style={{ margin: 0, color: "#00bcd4" }}>Almacén — Preparación</h2>
+          <h2 style={{ margin: 0, color: "#00bcd4" }}>Almacén — Historial (Despachadas)</h2>
           <div style={{ opacity: 0.8, fontSize: 13 }}>
-            Aquí aparecen las cotizaciones aceptadas comercialmente (sin descuento de inventario aún).
+            Aquí verás todas las cotizaciones despachadas y con inventario descontado.
           </div>
         </div>
 
@@ -151,14 +161,16 @@ export default function AlmacenCotizaciones() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar..." />
           </SearchBox>
 
-          <Btn onClick={load}><RefreshCw size={16} /> Recargar</Btn>
+          <Btn onClick={load}>
+            <RefreshCw size={16} /> Recargar
+          </Btn>
         </div>
       </Top>
 
       {loading ? (
         <div style={{ padding: "1rem", opacity: 0.8 }}>Cargando...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ padding: "1rem", opacity: 0.8 }}>No hay cotizaciones en preparación.</div>
+        <div style={{ padding: "1rem", opacity: 0.8 }}>No hay cotizaciones despachadas.</div>
       ) : (
         <Table>
           <thead>
@@ -181,7 +193,7 @@ export default function AlmacenCotizaciones() {
                 <td>{c.fecha ? new Date(c.fecha).toLocaleString() : "-"}</td>
                 <td>
                   <Btn onClick={() => navigate(`/almacen/cotizacion/${c.id}`)}>
-                    <Eye size={16} /> Despachar
+                    <Eye size={16} /> Ver
                   </Btn>
                 </td>
               </tr>

@@ -1,10 +1,10 @@
 // src/layouts/AlmacenLayout.jsx
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import { LogOut, ClipboardList, Sun, Moon, Menu, Warehouse } from "lucide-react";
+import { LogOut, ClipboardList, Sun, Moon, Menu, Warehouse, History } from "lucide-react";
 import { useTheme } from "../context/ThemeContext.jsx";
 import logo from "../assets/logo_veganclean.png";
 
@@ -202,6 +202,7 @@ const MainContent = styled.main`
 
 export function AlmacenLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
@@ -209,6 +210,7 @@ export function AlmacenLayout() {
 
   useEffect(() => {
     verificarSesion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function verificarSesion() {
@@ -243,6 +245,8 @@ export function AlmacenLayout() {
     navigate("/admin/login");
   };
 
+  const isActive = (path) => location.pathname.startsWith(path);
+
   if (checking) {
     return (
       <LoadingScreen>
@@ -264,12 +268,23 @@ export function AlmacenLayout() {
 
           <MenuContainer>
             <MenuItem
+              active={isActive("/almacen/cotizaciones")}
               onClick={() => {
                 navigate("/almacen/cotizaciones");
                 setSidebarOpen(false);
               }}
             >
               <ClipboardList size={18} /> Cotizaciones
+            </MenuItem>
+
+            <MenuItem
+              active={isActive("/almacen/historial")}
+              onClick={() => {
+                navigate("/almacen/historial");
+                setSidebarOpen(false);
+              }}
+            >
+              <History size={18} /> Historial
             </MenuItem>
           </MenuContainer>
 

@@ -35,6 +35,7 @@ import DashboardVendedor from "../pages/vendedor/DashboardVendedor";
 // --- Páginas Almacén ---
 import AlmacenCotizaciones from "../pages/almacen/AlmacenCotizaciones.jsx";
 import AlmacenDespacho from "../pages/almacen/AlmacenDespacho.jsx";
+import HistorialCotizaciones from "../pages/almacen/HistorialCotizaciones.jsx";
 
 // --- Login ---
 import LoginAdmin from "../pages/admin/LoginAdmin";
@@ -127,7 +128,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/almacen/cotizaciones" replace /> }, // default
       { path: "cotizaciones", element: <AlmacenCotizaciones /> },
-      { path: "cotizacion/:id", element: <AlmacenDespacho /> }, // <- el id va aquí
+      { path: "cotizacion/:id", element: <AlmacenDespacho /> },
+      { path: "historial", element: <HistorialCotizaciones /> },
     ],
   },
 

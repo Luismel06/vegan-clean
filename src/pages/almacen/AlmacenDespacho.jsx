@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { CheckCircle2, ArrowLeft, ScanLine, RefreshCw } from "lucide-react";
+import { CheckCircle2, ArrowLeft, ScanLine, RefreshCw, Lock } from "lucide-react";
 
 const Wrap = styled.div`
   padding: 2rem;
@@ -85,7 +85,25 @@ const ScanBox = styled.div`
     color: ${({ theme }) => theme.text};
     min-width: 280px;
     outline: none;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   }
+`;
+
+const Pill = styled.div`
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  opacity: 0.9;
 `;
 
 function safeNum(v, fb = 0) {
@@ -103,7 +121,7 @@ function isBarcode4(code) {
 }
 
 export default function AlmacenDespacho() {
-  const { id } = useParams(); // viene de /almacen/cotizacion/:id
+  const { id } = useParams(); // /almacen/cotizacion/:id
   const navigate = useNavigate();
   const scanRef = useRef(null);
 
@@ -116,12 +134,15 @@ export default function AlmacenDespacho() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
-    // enfocamos input para que el lector dispare rápido
-    setTimeout(() => scanRef.current?.focus(), 200);
-  }, [cot?.id]);
+    // enfocar input solo si NO está bloqueado
+    if (cot?.id && cot?.estado !== "despachada") {
+      setTimeout(() => scanRef.current?.focus(), 200);
+    }
+  }, [cot?.id, cot?.estado]);
 
   async function load() {
     try {
@@ -182,7 +203,12 @@ export default function AlmacenDespacho() {
     return items.length > 0 && items.every((it) => it.despachada >= it.cantidad);
   }, [items]);
 
+  const readOnly = cot?.estado === "despachada";
+  const canEdit = !readOnly && cot?.estado === "preparacion";
+
   async function updateDespachada(rowId, newVal) {
+    if (!canEdit) return; // seguridad extra
+
     const v = Math.max(0, safeNum(newVal, 0));
 
     setDetalle((prev) =>
@@ -202,8 +228,9 @@ export default function AlmacenDespacho() {
   }
 
   async function sumarScan() {
-    const code = normalizeBarcode(scan);
+    if (!canEdit) return;
 
+    const code = normalizeBarcode(scan);
     if (!code) return;
 
     if (!isBarcode4(code)) {
@@ -213,7 +240,6 @@ export default function AlmacenDespacho() {
       return;
     }
 
-    // buscar por codigo_barra dentro de ESTA cotización
     const row = items.find((it) => it.codigo_barra === code);
 
     if (!row) {
@@ -293,6 +319,7 @@ export default function AlmacenDespacho() {
           <Btn
             onClick={confirmarDespacho}
             disabled={saving || !completo || cot.estado !== "preparacion"}
+            title={readOnly ? "Despachada: no se puede modificar" : ""}
           >
             <CheckCircle2 size={16} /> Confirmar despacho
           </Btn>
@@ -300,10 +327,20 @@ export default function AlmacenDespacho() {
       </TopRow>
 
       <Card>
-        <h2 style={{ margin: 0 }}>Despacho — Cotización #{cot.id}</h2>
-        <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
-          Estado: <strong>{cot.estado}</strong> · Inventario descontado:{" "}
-          <strong>{cot.inventario_descontado ? "Sí" : "No"}</strong>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0 }}>Despacho — Cotización #{cot.id}</h2>
+            <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
+              Estado: <strong>{cot.estado}</strong> · Inventario descontado:{" "}
+              <strong>{cot.inventario_descontado ? "Sí" : "No"}</strong>
+            </div>
+          </div>
+
+          {readOnly ? (
+            <Pill>
+              <Lock size={14} /> Modo solo lectura
+            </Pill>
+          ) : null}
         </div>
 
         <ScanBox>
@@ -312,6 +349,7 @@ export default function AlmacenDespacho() {
             value={scan}
             onChange={(e) => setScan(e.target.value)}
             placeholder='Escanear código de barra (Ej: AA12)'
+            disabled={!canEdit}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -319,7 +357,7 @@ export default function AlmacenDespacho() {
               }
             }}
           />
-          <Btn type="button" onClick={sumarScan}>
+          <Btn type="button" onClick={sumarScan} disabled={!canEdit}>
             <ScanLine size={16} /> Agregar 1
           </Btn>
 
@@ -363,15 +401,30 @@ export default function AlmacenDespacho() {
                       type="number"
                       min="0"
                       value={it.despachada}
+                      disabled={!canEdit}
                       onChange={(e) => updateDespachada(it.row_id, Number(e.target.value))}
-                      style={{ width: 110, padding: "0.45rem", borderRadius: 8, border: "1px solid #ccc" }}
+                      style={{
+                        width: 110,
+                        padding: "0.45rem",
+                        borderRadius: 8,
+                        border: "1px solid #ccc",
+                        opacity: !canEdit ? 0.7 : 1,
+                        cursor: !canEdit ? "not-allowed" : "text",
+                        color: "#038a0ccc",
+                      }}
                     />
                   </td>
                   <td>
-                    <SecondaryBtn onClick={() => updateDespachada(it.row_id, Math.max(0, it.despachada - 1))}>
+                    <SecondaryBtn
+                      disabled={!canEdit}
+                      onClick={() => updateDespachada(it.row_id, Math.max(0, it.despachada - 1))}
+                    >
                       -1
                     </SecondaryBtn>
-                    <SecondaryBtn onClick={() => updateDespachada(it.row_id, it.despachada + 1)}>
+                    <SecondaryBtn
+                      disabled={!canEdit}
+                      onClick={() => updateDespachada(it.row_id, it.despachada + 1)}
+                    >
                       +1
                     </SecondaryBtn>
                   </td>
@@ -380,11 +433,6 @@ export default function AlmacenDespacho() {
             )}
           </tbody>
         </Table>
-
-        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.8 }}>
-          Nota: el escaneo es confiable porque valida contra el <strong>código de barra</strong> del item dentro de esta cotización.
-          Si el código no existe en la cotización, no suma.
-        </div>
       </Card>
     </Wrap>
   );
