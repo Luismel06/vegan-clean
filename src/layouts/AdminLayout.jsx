@@ -1,6 +1,6 @@
 // src/layouts/AdminLayout.jsx
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import styled, { createGlobalStyle, keyframes } from "styled-components";
+import styled, { createGlobalStyle, keyframes, css } from "styled-components";
 import {
   LayoutDashboard,
   Users,
@@ -9,18 +9,19 @@ import {
   LogOut,
   Wrench,
   FileText,
-  Menu,
-  X,
   Sun,
-  Moon, //   Íconos para modo día/noche
+  Moon,
+  DollarSign,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
 import logo from "../assets/logo_veganclean.png";
-import { DollarSign } from "lucide-react";
-import { useTheme } from "../context/ThemeContext"; //   Usa el hook correcto
+import { useTheme } from "../context/ThemeContext";
 
+/* =========================
+   GLOBAL
+========================= */
 const NoPaddingGlobal = createGlobalStyle`
   body, html {
     margin: 0 !important;
@@ -30,6 +31,9 @@ const NoPaddingGlobal = createGlobalStyle`
   }
 `;
 
+/* =========================
+   LOADING
+========================= */
 const spin = keyframes`
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -56,164 +60,328 @@ const SpinningLogo = styled.img`
 
 const LoadingText = styled.p`
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
   color: ${({ theme }) => theme.accent};
   letter-spacing: 0.5px;
 `;
 
+/* =========================
+   LAYOUT
+========================= */
 const Layout = styled.div`
   display: flex;
   height: 100vh;
   background-color: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
-  @media (max-width: 900px) {
-    flex-direction: column;
-  }
 `;
 
+/* Desktop rail */
 const Sidebar = styled.nav`
-  width: 80px;
+  width: 86px;
   background-color: ${({ theme }) => theme.cardBackground};
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1rem 0;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease;
+  padding: 0.9rem 0;
+  box-shadow: 2px 0 14px rgba(0, 0, 0, 0.10);
   z-index: 1200;
 
   @media (max-width: 900px) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100%;
-    transform: ${({ $open }) => ($open ? "translateX(0)" : "translateX(-100%)")};
-    background-color: ${({ theme }) => theme.cardBackground};
+    display: none;
   }
+`;
+
+const RailLogo = styled.div`
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  margin-bottom: 10px;
+
+  img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+  }
+`;
+
+const RailDivider = styled.div`
+  width: 44px;
+  height: 1px;
+  background: ${({ theme }) => theme.border};
+  margin: 10px 0 6px;
+  opacity: 0.9;
 `;
 
 const IconButton = styled.button`
   background: none;
   border: none;
-  margin: 1rem 0;
+  margin: 0.45rem 0;
   color: ${({ $active, theme }) => ($active ? theme.accent : theme.text)};
   cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  transition: transform 0.12s ease, opacity 0.12s ease, color 0.12s ease;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+
+  ${({ $active }) =>
+    $active &&
+    css`
+      background: rgba(0, 0, 0, 0.06);
+    `}
 
   &:hover {
     color: ${({ theme }) => theme.accent};
-    transform: scale(1.2);
+    transform: translateY(-1px);
+    opacity: 0.98;
   }
 `;
 
+/* Main */
 const Content = styled.main`
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 `;
 
+/* Sticky top bar */
 const TopBar = styled.header`
   width: 100%;
+  backdrop-filter: blur(18px) saturate(180%);
   background-color: ${({ theme }) => theme.cardBackground};
+  border-bottom: 1px solid ${({ theme }) => theme.border};
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.8rem 1.5rem;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  padding: 0.85rem 1.2rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 1100;
+
+  @media (max-width: 900px) {
+    padding: 0.75rem 0.95rem;
+  }
 `;
 
 const Title = styled.h2`
   color: ${({ theme }) => theme.accent};
-  font-weight: 700;
+  font-weight: 900;
   margin: 0;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.6rem;
+  letter-spacing: 0.2px;
+
+  @media (max-width: 900px) {
+    font-size: 1.05rem;
+  }
+`;
+
+const TitleSub = styled.span`
+  font-size: 0.95rem;
+  font-weight: 800;
+  opacity: 0.85;
+  color: ${({ theme }) => theme.text};
+
+  @media (max-width: 900px) {
+    display: none;
+  }
 `;
 
 const UserInfo = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   font-size: 0.95rem;
   text-align: right;
 
   @media (max-width: 600px) {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.3rem;
+    gap: 0.55rem;
   }
 `;
 
 const Email = styled.span`
-  font-weight: 500;
+  font-weight: 700;
+  opacity: 0.92;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @media (max-width: 600px) {
+    max-width: 180px;
+    font-size: 0.88rem;
+  }
 `;
 
 const LogoutButton = styled.button`
   background-color: ${({ theme }) => theme.accent};
-  color: #ffffff;
+  color: #000;
   border: none;
-  border-radius: 8px;
-  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  padding: 0.58rem 0.85rem;
   cursor: pointer;
-  font-weight: 600;
-  display: flex;
+  font-weight: 900;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  transition: 0.3s;
+  gap: 0.45rem;
+  transition: transform 0.12s ease, opacity 0.12s ease;
 
   &:hover {
-    opacity: 0.9;
-    transform: scale(1.05);
+    opacity: 0.95;
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 600px) {
+    padding: 0.52rem 0.7rem;
+    border-radius: 12px;
+
+    span {
+      display: none;
+    }
   }
 `;
 
-const MobileMenuButton = styled.button`
-  background: none;
-  border: none;
-  color: ${({ theme }) => theme.text};
-  cursor: pointer;
-  display: none;
-  @media (max-width: 900px) {
-    display: block;
-  }
-
-  svg {
-    stroke: ${({ theme }) => theme.text};
-  }
-`;
-
-//   Nuevo botón de cambio de tema
 const ThemeToggleButton = styled.button`
   background: none;
-  border: none;
+  border: 1px solid ${({ theme }) => theme.border};
   cursor: pointer;
   color: ${({ theme }) => theme.text};
-  display: flex;
-  align-items: center;
-  transition: color 0.3s ease, transform 0.2s ease;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  transition: transform 0.12s ease, opacity 0.12s ease, border-color 0.12s ease;
 
   &:hover {
-    color: ${({ theme }) => theme.accent};
-    transform: rotate(15deg);
+    transform: translateY(-1px);
+    opacity: 0.95;
+    border-color: ${({ theme }) => theme.accent + "55"};
   }
 `;
 
+/* Scroll area for pages */
+const Body = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* espacio para la barra inferior en mobile */
+  padding-bottom: 0;
+
+  @media (max-width: 900px) {
+    padding-bottom: 78px;
+  }
+`;
+
+/* =========================
+   MOBILE BOTTOM NAV
+========================= */
+const BottomNav = styled.nav`
+  display: none;
+
+  @media (max-width: 900px) {
+    display: flex;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    height: 64px;
+    border-radius: 18px;
+    padding: 8px;
+    gap: 6px;
+    z-index: 2000;
+
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    background: ${({ theme }) =>
+      theme.name === "dark"
+        ? "rgba(18, 18, 18, 0.70)"
+        : "rgba(255, 255, 255, 0.70)"};
+
+    border: 1px solid ${({ theme }) => theme.border};
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.20);
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    /* mejor scroll horizontal si hay muchos items */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+`;
+
+const NavItem = styled.button`
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: ${({ theme }) => theme.text};
+  min-width: 74px;
+  height: 100%;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.accent + "22"};
+      color: ${theme.accent};
+    `}
+
+  &:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+`;
+
+const NavLabel = styled.span`
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  opacity: 0.95;
+`;
+
+/* =========================
+   COMPONENT
+========================= */
 export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const { theme, toggleTheme } = useTheme(); //   usa el hook del ThemeContext
+  const { theme, toggleTheme } = useTheme();
+
+  const isDark = (theme?.name ?? theme) === "dark";
+  const currentPath = location.pathname;
+
+  const NAV_ITEMS = useMemo(
+    () => [
+      { path: "/admin", title: "Dashboard", icon: LayoutDashboard },
+      { path: "/admin/Usuarios", title: "Usuarios", icon: Users },
+      { path: "/admin/equipos", title: "Equipos", icon: Wrench },
+      { path: "/admin/productos", title: "Productos", icon: ShoppingBag },
+      { path: "/admin/tickets", title: "Tickets", icon: ClipboardList },
+      { path: "/admin/publicaciones", title: "Posts", icon: FileText },
+      { path: "/admin/cotizaciones", title: "Cotiz.", icon: DollarSign },
+      { path: "/admin/clientes", title: "Clientes", icon: Users },
+    ],
+    []
+  );
 
   useEffect(() => {
     const checkSession = async () => {
@@ -241,26 +409,25 @@ export function AdminLayout() {
       if (perfil.rol === "admin") {
         setUser(data.user);
         setCheckingAuth(false);
-      } else if (perfil.rol === "vendedor") {
+        return;
+      }
+
+      if (perfil.rol === "vendedor") {
         navigate("/vendedor", { replace: true });
         return;
-      } else {
-        await Swal.fire({
-          icon: "error",
-          title: "Acceso denegado",
-          text: "Tu rol no tiene permisos para acceder a esta sección.",
-          confirmButtonColor: "#00bcd4",
-        });
-        navigate("/", { replace: true });
       }
+
+      await Swal.fire({
+        icon: "error",
+        title: "Acceso denegado",
+        text: "Tu rol no tiene permisos para acceder a esta sección.",
+        confirmButtonColor: "#00bcd4",
+      });
+      navigate("/", { replace: true });
     };
 
     checkSession();
   }, [navigate]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -278,102 +445,80 @@ export function AdminLayout() {
     );
   }
 
-  const currentPath = location.pathname;
-
   return (
     <>
       <NoPaddingGlobal />
 
       <Layout>
-        <Sidebar $open={menuOpen}>
-          <IconButton onClick={() => setMenuOpen(false)}>
-            <X size={26} />
-          </IconButton>
+        {/* Desktop: rail izquierdo */}
+        <Sidebar>
+          <RailLogo title="Vega Clean">
+            <img src={logo} alt="Logo" />
+          </RailLogo>
+          <RailDivider />
 
-          <IconButton
-            onClick={() => navigate("/admin")}
-            $active={currentPath === "/admin"}
-            title="Dashboard"
-          >
-            <LayoutDashboard size={24} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => navigate("/admin/Usuarios")}
-            $active={currentPath === "/admin/Usuarios"}
-            title="Usuarios"
-          >
-            <Users size={24} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => navigate("/admin/equipos")}
-            $active={currentPath === "/admin/equipos"}
-            title="Equipos"
-          >
-            <Wrench size={24} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => navigate("/admin/productos")}
-            $active={currentPath === "/admin/productos"}
-            title="Productos"
-          >
-            <ShoppingBag size={24} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => navigate("/admin/tickets")}
-            $active={currentPath === "/admin/tickets"}
-            title="Tickets"
-          >
-            <ClipboardList size={24} />
-          </IconButton>
-
-          <IconButton
-            onClick={() => navigate("/admin/publicaciones")}
-            $active={currentPath === "/admin/publicaciones"}
-            title="Publicaciones"
-          >
-            <FileText size={24} />
-          </IconButton>
-          <IconButton
-            onClick={() => navigate("/admin/cotizaciones")}
-            $active={currentPath === "/admin/cotizaciones"}
-            title="Cotizaciones"
-          >
-  <DollarSign size={24} />
-</IconButton>
-
+          {NAV_ITEMS.map((it) => {
+            const Icon = it.icon;
+            const active = currentPath === it.path;
+            return (
+              <IconButton
+                key={it.path}
+                onClick={() => navigate(it.path)}
+                $active={active}
+                title={it.title}
+              >
+                <Icon size={24} />
+              </IconButton>
+            );
+          })}
         </Sidebar>
 
         <Content>
           <TopBar>
             <Title>
-              <MobileMenuButton onClick={() => setMenuOpen(!menuOpen)}>
-                <Menu size={22} />
-              </MobileMenuButton>
-              Dashboard - Administrador
+              Dashboard <TitleSub>— Administrador</TitleSub>
             </Title>
 
             <UserInfo>
-              {/*   Nuevo botón de modo día/noche */}
               <ThemeToggleButton onClick={toggleTheme} title="Cambiar tema">
-                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
               </ThemeToggleButton>
 
-              <div>
-                <strong>Vega Clean</strong>
-                <br />
-                <Email>{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</Email>
-              </div>
-              <LogoutButton onClick={handleLogout}>
-                <LogOut size={18} /> Salir
+              <Email title={user?.email}>
+                {user?.user_metadata?.full_name ||
+                  user?.user_metadata?.name ||
+                  user?.email}
+              </Email>
+
+              <LogoutButton onClick={handleLogout} title="Cerrar sesión">
+                <LogOut size={18} />
+                <span>Salir</span>
               </LogoutButton>
             </UserInfo>
           </TopBar>
 
-          <Outlet />
+          <Body>
+            <Outlet />
+          </Body>
+
+          {/* Mobile: barra inferior */}
+          <BottomNav>
+            {NAV_ITEMS.map((it) => {
+              const Icon = it.icon;
+              const active = currentPath === it.path;
+              return (
+                <NavItem
+                  key={it.path}
+                  onClick={() => navigate(it.path)}
+                  $active={active}
+                  title={it.title}
+                >
+                  <Icon size={20} />
+                  <NavLabel>{it.title}</NavLabel>
+                </NavItem>
+              );
+            })}
+          </BottomNav>
         </Content>
       </Layout>
     </>

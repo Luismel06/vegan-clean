@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
-import { CheckCircle2, ArrowLeft, ScanLine, RefreshCw, Lock } from "lucide-react";
+import { CheckCircle2, ArrowLeft, ScanLine, RefreshCw } from "lucide-react";
 
 const Wrap = styled.div`
   padding: 2rem;
@@ -85,25 +85,7 @@ const ScanBox = styled.div`
     color: ${({ theme }) => theme.text};
     min-width: 280px;
     outline: none;
-
-    &:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
   }
-`;
-
-const Pill = styled.div`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  padding: 0.45rem 0.7rem;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 900;
-  border: 1px solid ${({ theme }) => theme.border};
-  background: ${({ theme }) => theme.background};
-  opacity: 0.9;
 `;
 
 function safeNum(v, fb = 0) {
@@ -111,9 +93,15 @@ function safeNum(v, fb = 0) {
   return Number.isFinite(n) ? n : fb;
 }
 
-// barcode esperado: 2 letras + 2 números (AA12)
+/** ===== Normalización agresiva (scanner) =====
+ * Quita CR/LF/TAB/espacios y cualquier whitespace raro.
+ */
 function normalizeBarcode(code) {
-  return String(code || "").trim().toUpperCase();
+  return String(code || "")
+    .replace(/[\r\n\t ]+/g, "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toUpperCase();
 }
 
 function isBarcode4(code) {
@@ -121,9 +109,14 @@ function isBarcode4(code) {
 }
 
 export default function AlmacenDespacho() {
-  const { id } = useParams(); // /almacen/cotizacion/:id
+  const { id } = useParams(); // viene de /almacen/cotizacion/:id
   const navigate = useNavigate();
   const scanRef = useRef(null);
+
+  // timer y locks para autoprocesado
+  const scanTimer = useRef(null);
+  const processingRef = useRef(false);
+  const lastProcessedRef = useRef({ code: "", ts: 0 });
 
   const [cot, setCot] = useState(null);
   const [detalle, setDetalle] = useState([]);
@@ -132,17 +125,32 @@ export default function AlmacenDespacho() {
 
   const RPC_CONFIRM = "confirmar_despacho_y_descontar";
 
+  // === Si está despachada (o no está en preparación), bloqueamos edición ===
+  const canEdit = useMemo(() => {
+    return cot?.estado === "preparacion";
+  }, [cot?.estado]);
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
-    // enfocar input solo si NO está bloqueado
-    if (cot?.id && cot?.estado !== "despachada") {
-      setTimeout(() => scanRef.current?.focus(), 200);
-    }
-  }, [cot?.id, cot?.estado]);
+    // Enfocar input al cargar cot
+    setTimeout(() => {
+      if (canEdit) scanRef.current?.focus();
+    }, 200);
+  }, [cot?.id, canEdit]);
+
+  // === Refocus global: click en cualquier parte re-enfoca input (si se puede editar) ===
+  useEffect(() => {
+    const onClick = () => {
+      if (!canEdit) return;
+      scanRef.current?.focus();
+    };
+    window.addEventListener("click", onClick);
+    return () => window.removeEventListener("click", onClick);
+  }, [canEdit]);
 
   async function load() {
     try {
@@ -189,7 +197,9 @@ export default function AlmacenDespacho() {
         row_id: r.id,
         tipo: isProd ? "producto" : "equipo",
         item_id: isProd ? r.producto_id : r.equipo_id,
-        nombre: item?.nombre || (isProd ? `Producto #${r.producto_id}` : `Equipo #${r.equipo_id}`),
+        nombre:
+          item?.nombre ||
+          (isProd ? `Producto #${r.producto_id}` : `Equipo #${r.equipo_id}`),
         marca: item?.marca || "-",
         modelo: item?.modelo || "-",
         codigo_barra: normalizeBarcode(item?.codigo_barra || ""),
@@ -203,14 +213,10 @@ export default function AlmacenDespacho() {
     return items.length > 0 && items.every((it) => it.despachada >= it.cantidad);
   }, [items]);
 
-  const readOnly = cot?.estado === "despachada";
-  const canEdit = !readOnly && cot?.estado === "preparacion";
-
   async function updateDespachada(rowId, newVal) {
-    if (!canEdit) return; // seguridad extra
+    if (!canEdit) return; // seguridad UI extra
 
     const v = Math.max(0, safeNum(newVal, 0));
-
     setDetalle((prev) =>
       prev.map((r) => (r.id === rowId ? { ...r, cantidad_despachada: v } : r))
     );
@@ -227,38 +233,85 @@ export default function AlmacenDespacho() {
     }
   }
 
-  async function sumarScan() {
+  /** ===== Procesar escaneo (Enter o timeout) ===== */
+  async function processScan(raw) {
     if (!canEdit) return;
 
-    const code = normalizeBarcode(scan);
+    const code = normalizeBarcode(raw);
     if (!code) return;
 
+    // anti-duplicados inmediatos (algunos scanners disparan doble)
+    const now = Date.now();
+    if (lastProcessedRef.current.code === code && now - lastProcessedRef.current.ts < 350) {
+      setScan("");
+      scanRef.current?.focus();
+      return;
+    }
+
     if (!isBarcode4(code)) {
-      Swal.fire("Código inválido", "El código debe ser 2 letras y 2 números. Ej: AA12", "warning");
+      await Swal.fire("Código inválido", "El código debe ser 2 letras y 2 números. Ej: AA12", "warning");
       setScan("");
       scanRef.current?.focus();
       return;
     }
 
     const row = items.find((it) => it.codigo_barra === code);
-
     if (!row) {
-      Swal.fire("No coincide", "Ese código no pertenece a esta cotización.", "info");
+      await Swal.fire("No coincide", "Ese código no pertenece a esta cotización.", "info");
       setScan("");
       scanRef.current?.focus();
       return;
     }
 
     if (row.despachada >= row.cantidad) {
-      Swal.fire("Completo", `Ya despachaste el máximo de "${row.nombre}".`, "info");
+      await Swal.fire("Completo", `Ya despachaste el máximo de "${row.nombre}".`, "info");
       setScan("");
       scanRef.current?.focus();
       return;
     }
 
+    lastProcessedRef.current = { code, ts: now };
     await updateDespachada(row.row_id, row.despachada + 1);
     setScan("");
     scanRef.current?.focus();
+  }
+
+  /** ===== Autoprocesado por timeout (si el scanner NO manda Enter) =====
+   * Si el usuario deja de escribir por X ms, intentamos procesar lo que hay.
+   */
+  function scheduleAutoProcess(nextValue) {
+    if (!canEdit) return;
+
+    if (scanTimer.current) clearTimeout(scanTimer.current);
+
+    scanTimer.current = setTimeout(async () => {
+      if (processingRef.current) return;
+      processingRef.current = true;
+      try {
+        await processScan(nextValue);
+      } finally {
+        processingRef.current = false;
+      }
+    }, 120); // 120ms suele ser suficiente (ajustable)
+  }
+
+  function onScanChange(v) {
+    setScan(v);
+    scheduleAutoProcess(v);
+  }
+
+  async function sumarScan() {
+    if (!canEdit) return;
+
+    if (scanTimer.current) clearTimeout(scanTimer.current); // evita doble procesado
+    if (processingRef.current) return;
+
+    processingRef.current = true;
+    try {
+      await processScan(scan);
+    } finally {
+      processingRef.current = false;
+    }
   }
 
   async function confirmarDespacho() {
@@ -316,38 +369,24 @@ export default function AlmacenDespacho() {
             <RefreshCw size={16} /> Recargar
           </SecondaryBtn>
 
-          <Btn
-            onClick={confirmarDespacho}
-            disabled={saving || !completo || cot.estado !== "preparacion"}
-            title={readOnly ? "Despachada: no se puede modificar" : ""}
-          >
+          <Btn onClick={confirmarDespacho} disabled={saving || !completo || cot.estado !== "preparacion"}>
             <CheckCircle2 size={16} /> Confirmar despacho
           </Btn>
         </div>
       </TopRow>
 
       <Card>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Despacho — Cotización #{cot.id}</h2>
-            <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
-              Estado: <strong>{cot.estado}</strong> · Inventario descontado:{" "}
-              <strong>{cot.inventario_descontado ? "Sí" : "No"}</strong>
-            </div>
-          </div>
-
-          {readOnly ? (
-            <Pill>
-              <Lock size={14} /> Modo solo lectura
-            </Pill>
-          ) : null}
+        <h2 style={{ margin: 0 }}>Despacho — Cotización #{cot.id}</h2>
+        <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
+          Estado: <strong>{cot.estado}</strong> · Inventario descontado:{" "}
+          <strong>{cot.inventario_descontado ? "Sí" : "No"}</strong>
         </div>
 
         <ScanBox>
           <input
             ref={scanRef}
             value={scan}
-            onChange={(e) => setScan(e.target.value)}
+            onChange={(e) => onScanChange(e.target.value)}
             placeholder='Escanear código de barra (Ej: AA12)'
             disabled={!canEdit}
             onKeyDown={(e) => {
@@ -364,6 +403,12 @@ export default function AlmacenDespacho() {
           <div style={{ fontSize: 13, opacity: 0.85 }}>
             Completo: <strong>{completo ? "Sí" : "No"}</strong>
           </div>
+
+          {!canEdit ? (
+            <div style={{ fontSize: 13, opacity: 0.85 }}>
+              Seguridad: <strong>modo solo lectura</strong> (despachada o no editable).
+            </div>
+          ) : null}
         </ScanBox>
       </Card>
 
@@ -408,8 +453,8 @@ export default function AlmacenDespacho() {
                         padding: "0.45rem",
                         borderRadius: 8,
                         border: "1px solid #ccc",
-                        opacity: !canEdit ? 0.7 : 1,
-                        cursor: !canEdit ? "not-allowed" : "text",
+                        opacity: canEdit ? 1 : 0.7,
+                        cursor: canEdit ? "auto" : "not-allowed",
                         color: "#038a0ccc",
                       }}
                     />

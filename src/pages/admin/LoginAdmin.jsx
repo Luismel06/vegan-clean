@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const Container = styled.div`
   display: flex;
@@ -59,6 +59,7 @@ const Button = styled.button`
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none;
   }
 `;
 
@@ -106,12 +107,15 @@ function normalizeRole(v) {
 export default function LoginAdmin() {
   const navigate = useNavigate();
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loadingManual, setLoadingManual] = useState(false);
+
   // === Login con Google ===
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        // Mantén esto si ya te funciona con tu configuración
         redirectTo: window.location.origin + "/admin/login",
       },
     });
@@ -121,7 +125,65 @@ export default function LoginAdmin() {
     }
   };
 
-  // === Redirigir si ya hay sesión (pero dependiendo del rol) ===
+  // === Login manual (email/password) ===
+  const handleManualLogin = async () => {
+    const e = String(email || "").trim();
+    const p = String(password || "");
+
+    if (!e || !p) {
+      Swal.fire("Datos requeridos", "Completa el correo y la contraseña.", "warning");
+      return;
+    }
+
+    try {
+      setLoadingManual(true);
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: e,
+        password: p,
+      });
+
+      if (error) {
+        Swal.fire("Error", error.message || "No se pudo iniciar sesión.", "error");
+        return;
+      }
+
+      // Si login OK, el useEffect de abajo hace validate + redirect
+    } catch (err) {
+      console.error(err);
+      Swal.fire("Error", "Ocurrió un error iniciando sesión.", "error");
+    } finally {
+      setLoadingManual(false);
+    }
+  };
+
+  /**
+   * PATCH: Guardar auth_uid automáticamente
+   * - auth_uid = user.id (uuid de Supabase Auth)
+   * - Solo actualiza si está null o es distinto
+   */
+  async function upsertAuthUid({ email, authUid }) {
+    if (!email || !authUid) return;
+
+    // Intentamos actualizar sin romper el flujo si falla
+    try {
+      // OJO: esto requiere que exista la columna auth_uid en usuarios
+      const { error } = await supabase
+        .from("usuarios")
+        .update({ auth_uid: authUid })
+        .eq("email", email)
+        .or(`auth_uid.is.null,auth_uid.neq.${authUid}`);
+
+      if (error) {
+        // No bloqueamos login por esto, pero lo registramos
+        console.warn("No se pudo guardar auth_uid:", error.message);
+      }
+    } catch (e) {
+      console.warn("Error guardando auth_uid:", e);
+    }
+  }
+
+  // === Validar sesión + rol + guardar auth_uid + redirigir ===
   useEffect(() => {
     const validateAndRedirect = async () => {
       const { data: sessionData } = await supabase.auth.getUser();
@@ -129,10 +191,10 @@ export default function LoginAdmin() {
 
       if (!user?.email) return;
 
-      // Buscar el rol del usuario en la tabla usuarios
+      // Traemos rol + auth_uid si existe
       const { data: usuario, error } = await supabase
         .from("usuarios")
-        .select("rol")
+        .select("rol, auth_uid")
         .eq("email", user.email)
         .maybeSingle();
 
@@ -153,20 +215,24 @@ export default function LoginAdmin() {
         return;
       }
 
+      // PATCH auth_uid (si falta o cambió)
+      if (!usuario.auth_uid || usuario.auth_uid !== user.id) {
+        await upsertAuthUid({ email: user.email, authUid: user.id });
+      }
+
       const rol = normalizeRole(usuario.rol);
 
-      // Redirigir según el rol
       if (["admin", "administrador"].includes(rol)) {
         navigate("/admin", { replace: true });
         return;
       }
 
-      if (["vendedor"].includes(rol)) {
+      if (rol === "vendedor") {
         navigate("/vendedor/catalogo", { replace: true });
         return;
       }
 
-      if (["almacenista"].includes(rol)) {
+      if (rol === "almacenista") {
         navigate("/almacen/cotizaciones", { replace: true });
         return;
       }
@@ -182,6 +248,8 @@ export default function LoginAdmin() {
     validateAndRedirect();
   }, [navigate]);
 
+  const manualDisabled = loadingManual || !email.trim() || !password;
+
   return (
     <Container>
       <Card>
@@ -190,10 +258,28 @@ export default function LoginAdmin() {
           Inicia sesión para acceder a tu cuenta.
         </p>
 
-        {/* Login manual (deshabilitado por ahora) */}
-        <Input type="email" placeholder="Correo electrónico" />
-        <Input type="password" placeholder="Contraseña" />
-        <Button disabled>Iniciar sesión</Button>
+        {/* Login manual (habilitado) */}
+        <Input
+          type="email"
+          placeholder="Correo electrónico"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+        <Input
+          type="password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleManualLogin();
+          }}
+        />
+
+        <Button onClick={handleManualLogin} disabled={manualDisabled}>
+          {loadingManual ? "Iniciando..." : "Iniciar sesión"}
+        </Button>
 
         <Divider>o</Divider>
 

@@ -4,10 +4,20 @@ import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import { loadCart, saveCart, clearCart } from "../../shared/cartStorage.js";
+import { Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
 
 const Wrap = styled.section`
   padding: 1.6rem 2rem;
   color: ${({ theme }) => theme.text};
+  max-width: 1400px;
+  margin: 0 auto;
+
+  @media (max-width: 900px) {
+    padding: 1rem;
+  }
+
+  /* Para que el sticky del carrito funcione bien dentro del layout */
+  min-height: calc(100vh - 90px);
 `;
 
 const TopBar = styled.div`
@@ -20,11 +30,22 @@ const TopBar = styled.div`
 
 const Title = styled.h2`
   margin: 0;
+  font-weight: 1000;
+  color: ${({ theme }) => theme.accent};
 `;
 
 const Sub = styled.div`
-  opacity: 0.8;
-  font-size: 0.9rem;
+  opacity: 0.82;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  margin-top: 6px;
+`;
+
+const RightControls = styled.div`
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 `;
 
 const Tabs = styled.div`
@@ -38,21 +59,159 @@ const Tab = styled.button`
   background: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
   color: ${({ $active, theme }) => ($active ? "#000" : theme.text)};
   border-radius: 999px;
-  padding: 0.5rem 0.9rem;
-  font-weight: 900;
+  padding: 0.55rem 0.95rem;
+  font-weight: 1000;
   cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
 `;
 
+const Btn = styled.button`
+  border: none;
+  border-radius: 12px;
+  padding: 0.65rem 0.95rem;
+  font-weight: 1000;
+  cursor: pointer;
+  background: ${({ theme }) => theme.accent};
+  color: #000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const Secondary = styled(Btn)`
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  border: 1px solid ${({ theme }) => theme.border};
+`;
+
+const ControlsBar = styled.div`
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const SearchBox = styled.div`
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 14px;
+  padding: 0.65rem 0.85rem;
+
+  svg {
+    opacity: 0.85;
+  }
+
+  input {
+    border: none;
+    outline: none;
+    width: 100%;
+    background: transparent;
+    color: ${({ theme }) => theme.text};
+    font-size: 0.95rem;
+  }
+`;
+
+const FilterRow = styled.div`
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const Select = styled.select`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  border-radius: 14px;
+  padding: 0.65rem 0.8rem;
+  outline: none;
+  min-width: 160px;
+`;
+
+const FilterPills = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const Pill = styled.span`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  border-radius: 999px;
+  padding: 0.3rem 0.55rem;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.95;
+`;
+
+const PillBtn = styled.button`
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: ${({ theme }) => theme.text};
+
+  &:hover {
+    opacity: 0.9;
+  }
+`;
+
+/* ====== Two-column desktop layout (catalog + sticky cart) ====== */
+const MainGrid = styled.div`
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 14px;
+  align-items: start;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr 320px;
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+/* ====== Catalog grid ====== */
 const Grid = styled.div`
-  margin-top: 1rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(220px, 1fr));
   gap: 12px;
 
-  @media (max-width: 1200px) {
+  @media (max-width: 1300px) {
     grid-template-columns: repeat(3, minmax(220px, 1fr));
   }
-  @media (max-width: 900px) {
+  @media (max-width: 1000px) {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
   @media (max-width: 560px) {
@@ -63,10 +222,11 @@ const Grid = styled.div`
 const Card = styled.div`
   background: ${({ theme }) => theme.cardBackground};
   border: 1px solid ${({ theme }) => theme.border};
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
 `;
 
 const Img = styled.img`
@@ -85,17 +245,18 @@ const Body = styled.div`
 `;
 
 const Name = styled.div`
-  font-weight: 900;
+  font-weight: 1000;
   font-size: 1rem;
 `;
 
 const Meta = styled.div`
-  opacity: 0.85;
+  opacity: 0.88;
   font-size: 0.9rem;
+  line-height: 1.35;
 `;
 
 const Price = styled.div`
-  font-weight: 900;
+  font-weight: 1000;
   margin-top: 2px;
 `;
 
@@ -107,59 +268,97 @@ const Actions = styled.div`
 `;
 
 const Qty = styled.input`
-  width: 70px;
-  padding: 0.45rem;
-  border-radius: 10px;
+  width: 74px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
+  outline: none;
 `;
 
-const Btn = styled.button`
-  border: none;
-  border-radius: 10px;
-  padding: 0.6rem 0.9rem;
-  font-weight: 900;
-  cursor: pointer;
-  background: ${({ theme }) => theme.accent};
-  color: #000;
+/* ====== Cart (sticky) ====== */
+const CartPanel = styled.aside`
+  position: sticky;
+  top: 88px; /* debajo del TopBar sticky del layout */
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+  border-radius: 16px;
+  padding: 0.95rem 1rem;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.10);
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  @media (max-width: 900px) {
+    display: none; /* en mobile usamos bottom cart */
   }
 `;
 
-const Secondary = styled(Btn)`
-  background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
-  border: 1px solid ${({ theme }) => theme.border};
+const CartHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
 `;
 
-const Drawer = styled.div`
-  position: sticky;
-  bottom: 14px;
-  margin-top: 14px;
+const CartTitle = styled.div`
+  font-weight: 1000;
+`;
+
+const CartSub = styled.div`
+  margin-top: 4px;
+  opacity: 0.86;
+  font-size: 0.9rem;
+`;
+
+const CartList = styled.div`
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 88px - 220px);
+  overflow: auto;
+  padding-right: 4px;
+`;
+
+const CartItem = styled.div`
   border: 1px solid ${({ theme }) => theme.border};
-  background: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.background};
   border-radius: 14px;
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.8rem;
+`;
+
+const CartItemTop = styled.div`
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  gap: 10px;
+  align-items: flex-start;
+`;
+
+const CartItemName = styled.div`
+  font-weight: 1000;
+  font-size: 0.92rem;
+  line-height: 1.25;
+`;
+
+const CartItemMeta = styled.div`
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.8;
+`;
+
+const CartItemRight = styled.div`
+  text-align: right;
+  font-weight: 1000;
+  white-space: nowrap;
 `;
 
 const RemoveBtn = styled.button`
-  margin-left: 10px;
+  margin-top: 8px;
   border: 1px solid ${({ theme }) => theme.border};
-  background: ${({ theme }) => theme.background};
+  background: ${({ theme }) => theme.cardBackground};
   color: ${({ theme }) => theme.text};
-  border-radius: 10px;
-  padding: 0.25rem 0.55rem;
+  border-radius: 12px;
+  padding: 0.35rem 0.6rem;
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
 
   &:hover {
@@ -168,24 +367,124 @@ const RemoveBtn = styled.button`
   }
 `;
 
+const CartFooter = styled.div`
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const CartTotal = styled.div`
+  font-weight: 1000;
+  line-height: 1.2;
+  div:nth-child(2) {
+    opacity: 0.86;
+    font-weight: 900;
+    font-size: 0.92rem;
+    margin-top: 4px;
+  }
+`;
+
+/* ====== Mobile bottom cart (always visible) ====== */
+const MobileCartBar = styled.div`
+  display: none;
+
+  @media (max-width: 900px) {
+    display: flex;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 2500;
+
+    border: 1px solid ${({ theme }) => theme.border};
+    border-radius: 18px;
+    padding: 10px 10px;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    background: ${({ theme }) =>
+      theme.name === "dark"
+        ? "rgba(18, 18, 18, 0.70)"
+        : "rgba(255, 255, 255, 0.70)"};
+
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.20);
+  }
+`;
+
+const MobileCartLeft = styled.div`
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+`;
+
+const MobileCartInfo = styled.div`
+  min-width: 0;
+
+  div:first-child {
+    font-weight: 1000;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  div:last-child {
+    opacity: 0.9;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+`;
+
+const MobileCartIcon = styled.div`
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.accent + "14"};
+  color: ${({ theme }) => theme.accent};
+`;
+
+const MobileActions = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`;
+
+const MobileSafeSpace = styled.div`
+  display: none;
+  @media (max-width: 900px) {
+    display: block;
+    height: 92px; /* para que el contenido no quede tapado por el carrito fijo */
+  }
+`;
+
+/* ===== helpers ===== */
 function formatRD(v) {
   const n = Number(v || 0);
   return `RD$ ${n.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
-
 function cleanDoc(v) {
   return String(v || "").trim();
 }
-
 function digitsOnly(v) {
   return String(v || "").replace(/\D/g, "");
 }
-
 function safeImg(url) {
   return url && String(url).trim() ? String(url).trim() : "/inicio.png";
 }
 
-/** ===== Generar número de caso (igual idea que Servicios) ===== */
+/** ===== Generar número de caso ===== */
 function generarNumeroCaso() {
   const y = new Date().getFullYear();
   const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -383,8 +682,15 @@ export default function VendedorCatalogo() {
   const [cart, setCart] = useState(() => loadCart());
   const [qtyDraft, setQtyDraft] = useState({});
 
+  // NEW: search + filters
+  const [q, setQ] = useState("");
+  const [fCategoria, setFCategoria] = useState("");
+  const [fMarca, setFMarca] = useState("");
+  const [fOrden, setFOrden] = useState("recientes"); // recientes | precio_asc | precio_desc | nombre_asc
+
   useEffect(() => {
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -418,6 +724,62 @@ export default function VendedorCatalogo() {
   }
 
   const list = useMemo(() => (tab === "productos" ? productos : equipos), [tab, productos, equipos]);
+
+  // NEW: options for filters
+  const categorias = useMemo(() => {
+    const set = new Set();
+    for (const it of list) if (it?.categoria) set.add(String(it.categoria).trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [list]);
+
+  const marcas = useMemo(() => {
+    const set = new Set();
+    for (const it of list) if (it?.marca) set.add(String(it.marca).trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [list]);
+
+  // NEW: filtered list
+  const filtered = useMemo(() => {
+    const qq = String(q || "").toLowerCase().trim();
+
+    let arr = (list || []).filter((it) => {
+      const hay = [
+        it.nombre,
+        it.marca,
+        it.modelo,
+        it.categoria,
+        `id:${it.id}`,
+      ]
+        .map((x) => String(x ?? "").toLowerCase())
+        .join(" | ");
+
+      if (qq && !hay.includes(qq)) return false;
+      if (fCategoria && String(it.categoria || "") !== fCategoria) return false;
+      if (fMarca && String(it.marca || "") !== fMarca) return false;
+      return true;
+    });
+
+    // order
+    if (fOrden === "precio_asc") {
+      arr = arr.slice().sort((a, b) => Number(a?.precio || 0) - Number(b?.precio || 0));
+    } else if (fOrden === "precio_desc") {
+      arr = arr.slice().sort((a, b) => Number(b?.precio || 0) - Number(a?.precio || 0));
+    } else if (fOrden === "nombre_asc") {
+      arr = arr.slice().sort((a, b) =>
+        String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es")
+      );
+    }
+    // "recientes" ya viene por id desc desde supabase
+    return arr;
+  }, [list, q, fCategoria, fMarca, fOrden]);
+
+  useEffect(() => {
+    // si cambias de tab, resetea filtros que no existan
+    setFCategoria("");
+    setFMarca("");
+    setFOrden("recientes");
+    setQ("");
+  }, [tab]);
 
   function keyOf(tipo, id) {
     return `${tipo}-${id}`;
@@ -463,6 +825,11 @@ export default function VendedorCatalogo() {
     [cart]
   );
 
+  const cartCount = useMemo(
+    () => cart.reduce((acc, it) => acc + Number(it.cantidad || 0), 0),
+    [cart]
+  );
+
   async function pedirDocumentoConValidacion() {
     const { isConfirmed, value } = await Swal.fire({
       title: "Documento del cliente",
@@ -493,8 +860,7 @@ export default function VendedorCatalogo() {
           Swal.showValidationMessage("Documento inválido. Cédula=11 dígitos, RNC=9 dígitos.");
           return null;
         }
-
-        return d; // solo dígitos
+        return d;
       },
     });
 
@@ -512,16 +878,13 @@ export default function VendedorCatalogo() {
     if (!documento) return;
 
     try {
-      // 1) Buscar cliente
       let cliente = await buscarClientePorDocumento(documento);
 
-      // 2) Si no existe, crear cliente
       if (!cliente) {
         cliente = await modalCrearCliente({ documento });
         if (!cliente) return;
       }
 
-      // 3) Crear preventa vinculada + vendedor_id + numero_caso
       const myUid = await getMyUid();
       if (!myUid) {
         Swal.fire("Sesión", "No se detectó usuario autenticado. Inicia sesión.", "warning");
@@ -532,8 +895,8 @@ export default function VendedorCatalogo() {
       const numero_caso = generarNumeroCaso();
 
       const payloadPreventa = {
-        numero_caso,              // ✅ NUEVO
-        vendedor_id: myUid,       // ✅ CAMBIO: vendedor_id (no vendedor_uid)
+        numero_caso,
+        vendedor_id: myUid,
         cliente_id: cliente.id,
         tipo_cliente: tipoCliente,
         cliente: cliente.nombre || "Cliente",
@@ -556,7 +919,6 @@ export default function VendedorCatalogo() {
 
       const preventaId = prev.id;
 
-      // 4) Insertar detalle_preventa
       const detalles = cart.map((it) => ({
         preventa_id: preventaId,
         cantidad: Number(it.cantidad || 1),
@@ -577,68 +939,33 @@ export default function VendedorCatalogo() {
       setCart([]);
     } catch (e) {
       console.error(e);
-
-      // Si choca con el unique de numero_caso (muy raro), reintenta 1 vez
-      const msg = String(e?.message || "");
-      if (msg.toLowerCase().includes("preventas_numero_caso_uq")) {
-        try {
-          const documento2 = documento;
-          let cliente2 = await buscarClientePorDocumento(documento2);
-          if (!cliente2) cliente2 = await modalCrearCliente({ documento: documento2 });
-          if (!cliente2) return;
-
-          const myUid2 = await getMyUid();
-          const numero_caso2 = generarNumeroCaso();
-
-          const payload2 = {
-            numero_caso: numero_caso2,
-            vendedor_id: myUid2,
-            cliente_id: cliente2.id,
-            tipo_cliente: cliente2.tipo_cliente || "persona",
-            cliente: cliente2.nombre || "Cliente",
-            cedula: (cliente2.tipo_cliente || "persona") === "persona" ? (cliente2.cedula || documento2) : null,
-            empresa_nombre: (cliente2.tipo_cliente || "persona") === "empresa" ? cliente2.nombre : null,
-            empresa_rnc: (cliente2.tipo_cliente || "persona") === "empresa" ? (cliente2.empresa_rnc || documento2) : null,
-            telefono: cliente2.telefono,
-            email: cliente2.email,
-            direccion: cliente2.direccion,
-            estado: "enviada",
-          };
-
-          const { data: prev2, error: ePrev2 } = await supabase
-            .from("preventas")
-            .insert(payload2)
-            .select("id, numero_caso")
-            .single();
-          if (ePrev2) throw ePrev2;
-
-          const preventaId2 = prev2.id;
-
-          const detalles2 = cart.map((it) => ({
-            preventa_id: preventaId2,
-            cantidad: Number(it.cantidad || 1),
-            producto_id: it.tipo === "producto" ? it.item_id : null,
-            equipo_id: it.tipo === "equipo" ? it.item_id : null,
-          }));
-
-          const { error: eDet2 } = await supabase.from("detalle_preventa").insert(detalles2);
-          if (eDet2) throw eDet2;
-
-          Swal.fire(
-            "Orden enviada",
-            `Preventa creada.\n#Caso: ${prev2.numero_caso}\nID: #${preventaId2}`,
-            "success"
-          );
-          clearCart();
-          setCart([]);
-          return;
-        } catch (e2) {
-          console.error(e2);
-        }
-      }
-
       Swal.fire("Error", "No se pudo enviar la orden.", "error");
     }
+  }
+
+  const tipoActual = tab === "productos" ? "producto" : "equipo";
+
+  const activePills = useMemo(() => {
+    const pills = [];
+    if (q) pills.push({ k: "q", label: `Buscar: "${q}"` });
+    if (fMarca) pills.push({ k: "marca", label: `Marca: ${fMarca}` });
+    if (fCategoria) pills.push({ k: "categoria", label: `Categoría: ${fCategoria}` });
+    if (fOrden && fOrden !== "recientes") pills.push({ k: "orden", label: `Orden: ${fOrden}` });
+    return pills;
+  }, [q, fMarca, fCategoria, fOrden]);
+
+  function clearOne(k) {
+    if (k === "q") setQ("");
+    if (k === "marca") setFMarca("");
+    if (k === "categoria") setFCategoria("");
+    if (k === "orden") setFOrden("recientes");
+  }
+
+  function clearAllFilters() {
+    setQ("");
+    setFMarca("");
+    setFCategoria("");
+    setFOrden("recientes");
   }
 
   return (
@@ -646,10 +973,12 @@ export default function VendedorCatalogo() {
       <TopBar>
         <div>
           <Title>Catálogo vendedor</Title>
-          <Sub>Precios fijos. Agrega ítems al carrito y envía la orden vinculada a cliente (cédula/RNC).</Sub>
+          <Sub>
+            Busca, filtra y agrega ítems al carrito. El carrito permanece visible en laptop y en mobile.
+          </Sub>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <RightControls>
           <Tabs>
             <Tab $active={tab === "productos"} onClick={() => setTab("productos")}>
               Productos
@@ -659,85 +988,217 @@ export default function VendedorCatalogo() {
             </Tab>
           </Tabs>
           <Secondary onClick={cargar}>Recargar</Secondary>
-        </div>
+        </RightControls>
       </TopBar>
 
-      {loading ? (
-        <div style={{ marginTop: 12, opacity: 0.8 }}>Cargando...</div>
-      ) : (
-        <Grid>
-          {list.map((it) => {
-            const tipo = tab === "productos" ? "producto" : "equipo";
-            const k = keyOf(tipo, it.id);
+      {/* Search + Filters */}
+      <ControlsBar>
+        <SearchBox>
+          <Search size={18} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por nombre, marca, modelo, categoría o ID…"
+          />
+        </SearchBox>
 
-            return (
-              <Card key={it.id}>
-                <Img
-                  src={safeImg(it.imagen_url)}
-                  alt={it.nombre}
-                  onError={(e) => (e.currentTarget.src = "/inicio.png")}
-                />
-                <Body>
-                  <Name>{it.nombre}</Name>
-                  <Meta>
-                    {it.marca ? (
-                      <div>
-                        <strong>Marca:</strong> {it.marca}
-                      </div>
-                    ) : null}
-                    {it.modelo ? (
-                      <div>
-                        <strong>Modelo:</strong> {it.modelo}
-                      </div>
-                    ) : null}
-                    {it.categoria ? (
-                      <div>
-                        <strong>Categoría:</strong> {it.categoria}
-                      </div>
-                    ) : null}
-                  </Meta>
-                  <Price>{formatRD(it.precio)}</Price>
+        <FilterRow>
+          <Select value={fMarca} onChange={(e) => setFMarca(e.target.value)}>
+            <option value="">Marca (todas)</option>
+            {marcas.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
 
-                  <Actions>
-                    <Qty
-                      type="number"
-                      min="1"
-                      value={qtyDraft[k] ?? 1}
-                      onChange={(e) => setQtyDraft((p) => ({ ...p, [k]: Number(e.target.value) }))}
-                    />
-                    <Btn onClick={() => addToCart(tipo, it)}>Agregar</Btn>
-                  </Actions>
-                </Body>
-              </Card>
-            );
-          })}
-        </Grid>
-      )}
+          <Select value={fCategoria} onChange={(e) => setFCategoria(e.target.value)}>
+            <option value="">Categoría (todas)</option>
+            {categorias.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
 
-      <Drawer>
+          <Select value={fOrden} onChange={(e) => setFOrden(e.target.value)}>
+            <option value="recientes">Orden: recientes</option>
+            <option value="precio_asc">Precio: menor → mayor</option>
+            <option value="precio_desc">Precio: mayor → menor</option>
+            <option value="nombre_asc">Nombre: A → Z</option>
+          </Select>
+
+          <Secondary onClick={clearAllFilters} disabled={!activePills.length}>
+            <SlidersHorizontal size={18} /> Limpiar
+          </Secondary>
+        </FilterRow>
+      </ControlsBar>
+
+      {activePills.length ? (
+        <FilterPills style={{ marginTop: 10 }}>
+          {activePills.map((p) => (
+            <Pill key={p.k}>
+              {p.label}
+              <PillBtn onClick={() => clearOne(p.k)} title="Quitar">
+                <X size={14} />
+              </PillBtn>
+            </Pill>
+          ))}
+        </FilterPills>
+      ) : null}
+
+      <MainGrid>
+        {/* Catalog */}
         <div>
-          <div style={{ fontWeight: 900 }}>Carrito: {cart.length} ítem(s)</div>
-          <div style={{ opacity: 0.85 }}>
-            Subtotal estimado: <strong>{formatRD(cartSubtotal)}</strong>
-          </div>
-
-          {cart.length > 0 ? (
-            <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>
-              {cart.slice(0, 4).map((x, idx) => (
-                <div key={idx} style={{ marginTop: 6 }}>
-                  • {x.tipo} {x.nombre} × {x.cantidad}{" "}
-                  <span style={{ opacity: 0.7 }}>
-                    ({x.tipo === "producto" ? `P-${x.item_id}` : `E-${x.item_id}`})
-                  </span>
-                  <RemoveBtn onClick={() => removeFromCart(x.tipo, x.item_id)}>Quitar</RemoveBtn>
-                </div>
-              ))}
-              {cart.length > 4 ? <div>… y {cart.length - 4} más</div> : null}
+          {loading ? (
+            <div style={{ marginTop: 12, opacity: 0.8 }}>Cargando...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ marginTop: 12, opacity: 0.8 }}>
+              No hay resultados con los filtros actuales.
             </div>
-          ) : null}
+          ) : (
+            <Grid>
+              {filtered.map((it) => {
+                const k = keyOf(tipoActual, it.id);
+
+                return (
+                  <Card key={it.id}>
+                    <Img
+                      src={safeImg(it.imagen_url)}
+                      alt={it.nombre}
+                      onError={(e) => (e.currentTarget.src = "/inicio.png")}
+                    />
+                    <Body>
+                      <Name>{it.nombre}</Name>
+
+                      <Meta>
+                        {it.marca ? (
+                          <div>
+                            <strong>Marca:</strong> {it.marca}
+                          </div>
+                        ) : null}
+                        {it.modelo ? (
+                          <div>
+                            <strong>Modelo:</strong> {it.modelo}
+                          </div>
+                        ) : null}
+                        {it.categoria ? (
+                          <div>
+                            <strong>Categoría:</strong> {it.categoria}
+                          </div>
+                        ) : null}
+                        <div style={{ marginTop: 6, opacity: 0.75, fontSize: 12 }}>
+                          {tab === "productos" ? `P-${it.id}` : `E-${it.id}`}
+                        </div>
+                      </Meta>
+
+                      <Price>{formatRD(it.precio)}</Price>
+
+                      <Actions>
+                        <Qty
+                          type="number"
+                          min="1"
+                          value={qtyDraft[k] ?? 1}
+                          onChange={(e) =>
+                            setQtyDraft((p) => ({ ...p, [k]: Number(e.target.value) }))
+                          }
+                        />
+                        <Btn onClick={() => addToCart(tipoActual, it)}>Agregar</Btn>
+                      </Actions>
+                    </Body>
+                  </Card>
+                );
+              })}
+            </Grid>
+          )}
+
+          {/* espacio para mobile cart fijo */}
+          <MobileSafeSpace />
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {/* Sticky cart (desktop/tablet) */}
+        <CartPanel>
+          <CartHeader>
+            <div>
+              <CartTitle>Carrito</CartTitle>
+              <CartSub>
+                Ítems: <strong>{cartCount}</strong> · Subtotal:{" "}
+                <strong>{formatRD(cartSubtotal)}</strong>
+              </CartSub>
+            </div>
+            <div style={{ opacity: 0.85, fontWeight: 1000 }}>
+              <ShoppingCart size={18} />
+            </div>
+          </CartHeader>
+
+          <CartList>
+            {cart.length === 0 ? (
+              <div style={{ opacity: 0.85, padding: "6px 2px" }}>
+                Aún no has agregado ítems.
+              </div>
+            ) : (
+              cart.map((x, idx) => (
+                <CartItem key={`${x.tipo}-${x.item_id}-${idx}`}>
+                  <CartItemTop>
+                    <div style={{ minWidth: 0 }}>
+                      <CartItemName title={`${x.nombre}`}>
+                        {x.nombre} × {x.cantidad}
+                      </CartItemName>
+                      <CartItemMeta>
+                        {x.tipo} ·{" "}
+                        <span style={{ opacity: 0.75 }}>
+                          {x.tipo === "producto" ? `P-${x.item_id}` : `E-${x.item_id}`}
+                        </span>
+                      </CartItemMeta>
+                    </div>
+
+                    <CartItemRight>
+                      {formatRD(Number(x.precio || 0) * Number(x.cantidad || 0))}
+                    </CartItemRight>
+                  </CartItemTop>
+
+                  <RemoveBtn onClick={() => removeFromCart(x.tipo, x.item_id)}>
+                    Quitar
+                  </RemoveBtn>
+                </CartItem>
+              ))
+            )}
+          </CartList>
+
+          <CartFooter>
+            <Secondary
+              onClick={() => {
+                clearCart();
+                setCart([]);
+              }}
+              disabled={!cart.length}
+            >
+              Vaciar
+            </Secondary>
+
+            <Btn onClick={enviarOrden} disabled={!cart.length}>
+              Enviar orden
+            </Btn>
+          </CartFooter>
+        </CartPanel>
+      </MainGrid>
+
+      {/* Mobile always-visible cart bar */}
+      <MobileCartBar>
+        <MobileCartLeft>
+          <MobileCartIcon>
+            <ShoppingCart size={18} />
+          </MobileCartIcon>
+
+          <MobileCartInfo>
+            <div>
+              Carrito: {cartCount} ítem{cartCount === 1 ? "" : "s"}
+            </div>
+            <div>Subtotal: {formatRD(cartSubtotal)}</div>
+          </MobileCartInfo>
+        </MobileCartLeft>
+
+        <MobileActions>
           <Secondary
             onClick={() => {
               clearCart();
@@ -747,11 +1208,12 @@ export default function VendedorCatalogo() {
           >
             Vaciar
           </Secondary>
+
           <Btn onClick={enviarOrden} disabled={!cart.length}>
-            Enviar orden
+            Enviar
           </Btn>
-        </div>
-      </Drawer>
+        </MobileActions>
+      </MobileCartBar>
     </Wrap>
   );
 }
