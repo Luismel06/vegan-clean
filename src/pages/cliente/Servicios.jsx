@@ -6,98 +6,142 @@ import Swal from "sweetalert2";
 import emailjs from "emailjs-com";
 import { supabase } from "../../supabase/supabase.config";
 
-// ===================== ESTILOS =====================
+// ===================== LAYOUT BASE =====================
 const Container = styled.section`
-  background: ${({ theme }) => theme.background};
   width: 100%;
   min-height: 100vh;
+  background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
-  padding: 6rem 1rem 5.5rem;
-  text-align: center;
+  padding: 6rem 1rem 7.5rem; /* + espacio para sticky bar */
 `;
 
-const Title = styled.h2`
-  margin: 0 0 1rem;
-  color: ${({ theme }) => theme.accent};
-`;
-
-const CardShell = styled.div`
-  max-width: 1000px;
+const MaxWidth = styled.div`
+  width: 100%;
+  max-width: 1180px;
   margin: 0 auto;
 `;
 
-/* ---- Consulta de caso (AHORA = PREVENTA) ---- */
+const HeaderBlock = styled.div`
+  text-align: center;
+  margin-bottom: 1.25rem;
+`;
+
+const Title = styled.h2`
+  margin: 0;
+  color: ${({ theme }) => theme.accent};
+  font-weight: 900;
+  letter-spacing: -0.02em;
+`;
+
+const Subtitle = styled.p`
+  margin: 0.55rem auto 0;
+  max-width: 820px;
+  opacity: 0.85;
+  font-size: 0.95rem;
+  line-height: 1.5;
+`;
+
+// ===================== TARJETA CONSULTA (ARRIBA) =====================
 const CaseCard = styled.div`
-  max-width: 1000px;
-  margin: 0 auto 2rem;
-  background-color: ${({ theme }) => theme.cardBackground};
-  border-radius: 12px;
-  padding: 1.3rem 1.5rem;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+  margin-top: 1.25rem;
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 18px;
+  padding: 1.2rem 1.25rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, ${({ theme }) => (theme.mode === "dark" ? 0.26 : 0.08)});
   text-align: left;
 `;
 
 const CaseTitle = styled.h3`
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.35rem;
   color: ${({ theme }) => theme.accent};
-  font-size: 1rem;
+  font-size: 1.02rem;
+  font-weight: 900;
+`;
+
+const CaseHint = styled.p`
+  margin: 0;
+  font-size: 0.88rem;
+  opacity: 0.85;
+  line-height: 1.45;
 `;
 
 const CaseForm = styled.form`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.4rem;
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.7rem;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const CaseInput = styled.input`
-  flex: 1;
-  min-width: 200px;
-  padding: 0.7rem;
-  border-radius: 8px;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background-color: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const CaseButton = styled.button`
-  background-color: ${({ theme }) => theme.accent};
-  color: #000000;
   border: none;
-  padding: 0.7rem 1.4rem;
-  border-radius: 8px;
+  border-radius: 12px;
+  padding: 0.85rem 1.05rem;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: 900;
+  background: ${({ theme }) => theme.accent};
+  color: #06130a;
   white-space: nowrap;
+
   &:hover {
-    opacity: 0.9;
+    opacity: 0.92;
   }
 `;
 
 const CaseResultBox = styled.div`
-  margin-top: 0.9rem;
-  padding: 0.8rem 1rem;
-  border-radius: 8px;
+  margin-top: 0.95rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
   background: ${({ theme }) => theme.inputBackground || "rgba(0,0,0,0.06)"};
-  font-size: 0.9rem;
+  border: 1px solid ${({ theme }) => theme.border};
+  font-size: 0.92rem;
 `;
 
 const CaseRow = styled.div`
   display: flex;
   justify-content: space-between;
-  gap: 0.8rem;
-  margin: 0.2rem 0;
+  gap: 0.85rem;
+  margin: 0.22rem 0;
+
   span:first-child {
-    font-weight: 600;
+    font-weight: 800;
+    opacity: 0.95;
+  }
+
+  span:last-child {
+    text-align: right;
+    opacity: 0.95;
   }
 `;
 
 const CaseStatusTag = styled.span`
-  padding: 0.2rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.7rem;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 900;
+
   background: ${({ $estado }) =>
     $estado === "cerrada"
       ? "rgba(46, 204, 113, 0.18)"
@@ -108,6 +152,7 @@ const CaseStatusTag = styled.span`
       : $estado === "cancelada"
       ? "rgba(231, 76, 60, 0.18)"
       : "rgba(241, 196, 15, 0.18)"};
+
   color: ${({ $estado }) =>
     $estado === "cerrada"
       ? "#27ae60"
@@ -120,83 +165,169 @@ const CaseStatusTag = styled.span`
       : "#b7950b"};
 `;
 
-/* ---- Tabs ---- */
+// ===================== TARJETA CATÁLOGO =====================
+const CardShell = styled.div`
+  margin-top: 1.1rem;
+`;
+
 const Tabs = styled.div`
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
 `;
 
 const TabButton = styled.button`
-  background-color: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
-  color: ${({ $active }) => ($active ? "#ffffff" : "#9fca95")};
-  border: none;
-  border-radius: 10px;
-  padding: 0.85rem 1.25rem;
-  font-weight: 800;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
+  color: ${({ $active }) => ($active ? "#06130a" : "inherit")};
+  border-radius: 999px;
+  padding: 0.8rem 1.1rem;
+  font-weight: 900;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: 0.18s ease;
+
   &:hover {
     opacity: 0.92;
   }
 `;
 
-/* ---- Contenido ---- */
 const Content = styled(motion.div)`
-  background-color: ${({ theme }) => theme.cardBackground};
-  border-radius: 16px;
-  padding: 1.4rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 18px;
+  padding: 1.25rem 1.25rem 1.35rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, ${({ theme }) => (theme.mode === "dark" ? 0.22 : 0.08)});
   text-align: left;
 `;
 
 const SectionHead = styled.div`
-  margin-bottom: 0.9rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
 
   h3 {
     margin: 0;
     color: ${({ theme }) => theme.accent};
+    font-weight: 900;
+    letter-spacing: -0.01em;
   }
 
   p {
-    margin: 0.35rem 0 0;
-    font-size: 0.85rem;
+    margin: 0;
+    font-size: 0.9rem;
     opacity: 0.85;
+    line-height: 1.4;
   }
 `;
 
-/* ---- Catálogo ---- */
-const FiltersRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.8rem;
-  margin: 0.8rem 0 1rem;
+// ===================== FILTROS (1 POR FILA) =====================
+const FiltersStack = styled.div`
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+
+  /* Para que no quede demasiado ancho en desktop */
+  max-width: 520px;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
+  outline: none;
+
+  &::placeholder {
+    opacity: 0.65;
+  }
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const SelectFilter = styled.select`
-  padding: 0.65rem 0.9rem;
-  border-radius: 10px;
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background-color: ${({ theme }) => theme.cardBackground};
-  color: #129508;
-  font-size: 0.9rem;
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
+  font-weight: 700;
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
+const FiltersMetaRow = styled.div`
+  margin-top: 0.15rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const MetaPill = styled.div`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  opacity: 0.95;
+`;
+
+const ClearFiltersBtn = styled.button`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: transparent;
+  color: ${({ theme }) => theme.text};
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+`;
+
+// ===================== GRID CATÁLOGO (RESPIRADO EN LAPTOP) =====================
 const ProductGrid = styled.div`
+  margin-top: 1.25rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 1rem;
+
+  /* Evita que se “aprieten” en laptop */
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 1.6rem;
+
+  justify-content: center;
+  padding: 0.25rem 0.15rem;
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 `;
 
-/* === IMAGEN CON EFECTO "ZOOM OUT / FULL VIEW" === */
+/* === IMAGEN CON EFECTO ZOOM OUT / FULL VIEW === */
 const ImgWrap = styled.div`
   width: 100%;
-  height: 180px;
+  height: 185px;
   position: relative;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.06);
 `;
 
 const ImgCover = styled.img`
@@ -224,23 +355,28 @@ const ImgContain = styled.img`
 `;
 
 const ProductCard = styled.div`
-  border-radius: 14px;
+  border-radius: 18px;
   border: 1px solid ${({ theme }) => theme.border};
-  background-color: ${({ theme }) => theme.background};
+  background: ${({ theme }) => theme.surface};
   overflow: hidden;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border 0.15s ease;
+
+  width: 100%;
+  max-width: 360px;
+
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 
   ${({ $selected, theme }) =>
     $selected
       ? `
-    border: 2px solid ${theme.accent};
-    box-shadow: 0 0 0 3px rgba(0, 160, 255, 0.18);
+    border-color: ${theme.accent};
+    box-shadow: 0 0 0 3px ${theme.accentSoft};
   `
       : ""}
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 14px 34px rgba(0, 0, 0, ${({ theme }) => (theme.mode === "dark" ? 0.18 : 0.10)});
   }
 
   &:hover ${ImgCover} {
@@ -256,38 +392,42 @@ const ProductCard = styled.div`
 `;
 
 const ProductBody = styled.div`
-  padding: 0.9rem 0.95rem 1rem;
+  padding: 0.95rem 1rem 1.05rem;
 `;
 
 const ProductTitle = styled.h4`
   margin: 0 0 0.25rem;
   color: ${({ theme }) => theme.accent};
   font-weight: 900;
+  letter-spacing: -0.01em;
 `;
 
 const ProductDesc = styled.p`
   margin: 0.35rem 0 0;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   opacity: 0.9;
   line-height: 1.35;
 `;
 
 const ProductTag = styled.span`
   display: inline-block;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 999px;
   background: ${({ theme }) => theme.inputBackground || "rgba(0,0,0,0.06)"};
+  border: 1px solid ${({ theme }) => theme.border};
   margin-right: 0.35rem;
   margin-bottom: 0.25rem;
+  font-weight: 800;
 `;
 
 const QtyRow = styled.div`
-  margin-top: 0.8rem;
+  margin-top: 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.7rem;
+  flex-wrap: wrap;
 `;
 
 const QtyControls = styled.div`
@@ -297,14 +437,15 @@ const QtyControls = styled.div`
 `;
 
 const QtyBtn = styled.button`
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background: ${({ theme }) => theme.cardBackground};
-  color: #16a34a;
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.accent};
   cursor: pointer;
   font-weight: 900;
+  font-size: 1.05rem;
 
   &:disabled {
     opacity: 0.4;
@@ -317,69 +458,87 @@ const QtyBtn = styled.button`
 `;
 
 const QtyInput = styled.input`
-  width: 64px;
-  height: 34px;
-  border-radius: 10px;
+  width: 70px;
+  height: 36px;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background: ${({ theme }) => theme.cardBackground};
-  color: #16a34a;
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
   text-align: center;
   font-weight: 900;
   outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const AddBtn = styled.button`
   border: none;
-  border-radius: 10px;
-  padding: 0.65rem 0.95rem;
+  border-radius: 12px;
+  padding: 0.7rem 1rem;
   font-weight: 900;
   cursor: pointer;
   background: ${({ theme }) => theme.accent};
-  color: #000;
+  color: #06130a;
 
   &:hover {
     opacity: 0.92;
   }
 `;
 
-/* ---- Form preventa ---- */
+// ===================== FORM PREVENTA =====================
 const FormPanel = styled(motion.form)`
-  margin-top: 1.2rem;
-  padding-top: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
   border-top: 1px solid ${({ theme }) => theme.border};
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.85rem;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 0.85rem;
-  border-radius: 10px;
+  padding: 0.9rem 0.95rem;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background-color: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const TextArea = styled.textarea`
   width: 100%;
-  padding: 0.85rem;
-  border-radius: 10px;
+  padding: 0.9rem 0.95rem;
+  border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
-  background-color: ${({ theme }) => theme.cardBackground};
+  background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
   resize: none;
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const Button = styled.button`
-  background-color: ${({ theme }) => theme.accent};
-  color: #000000;
+  background: ${({ theme }) => theme.accent};
+  color: #06130a;
   border: none;
-  padding: 0.95rem 1.6rem;
-  border-radius: 12px;
+  padding: 0.95rem 1.1rem;
+  border-radius: 14px;
   cursor: pointer;
   font-weight: 900;
   transition: 0.2s;
+
   &:hover {
     opacity: 0.9;
   }
@@ -389,31 +548,34 @@ const TipoClienteRow = styled.div`
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   align-items: center;
 
   label {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.45rem;
     cursor: pointer;
+    font-weight: 800;
+    opacity: 0.95;
   }
 `;
 
+// ===================== STICKY BAR =====================
 const StickyBar = styled.div`
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   padding: 0.9rem 1rem;
-  background: rgba(10, 14, 18, 0.75);
+  background: rgba(10, 14, 18, 0.72);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   z-index: 999;
 `;
 
 const StickyInner = styled.div`
-  max-width: 1000px;
+  max-width: 1180px;
   margin: 0 auto;
   display: flex;
   gap: 0.8rem;
@@ -424,11 +586,11 @@ const StickyInner = styled.div`
 
 const SelectedCount = styled.div`
   color: #fff;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 0.95rem;
 
   span {
-    color: ${({ theme }) => theme.accent};
+    color: #7ee787;
   }
 `;
 
@@ -442,7 +604,7 @@ const ClearBtn = styled.button`
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: transparent;
   color: #fff;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 0.75rem 1rem;
   font-weight: 900;
   cursor: pointer;
@@ -459,9 +621,9 @@ const ClearBtn = styled.button`
 
 const QuoteBtn = styled.button`
   border: none;
-  background: ${({ theme }) => theme.accent};
-  color: #000;
-  border-radius: 12px;
+  background: #7ee787;
+  color: #06130a;
+  border-radius: 14px;
   padding: 0.75rem 1rem;
   font-weight: 900;
   cursor: pointer;
@@ -487,7 +649,6 @@ const getImageUrl = (bucket, imagen_url) => {
   return data?.publicUrl || "";
 };
 
-// Genera número de caso para preventas
 function generarNumeroCaso() {
   const y = new Date().getFullYear();
   const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -500,12 +661,10 @@ function labelEstado(estado) {
   return estado;
 }
 
-// --------- Normalización ----------
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
 
-// --------- Cédula (11 dígitos, checksum) ----------
 function validarCedula(input) {
   const ced = onlyDigits(input);
   if (ced.length !== 11) return false;
@@ -525,7 +684,6 @@ function validarCedula(input) {
   return digito === calc;
 }
 
-// --------- RNC (9 dígitos, checksum clásico) ----------
 function validarRNC(input) {
   const rnc = onlyDigits(input);
   if (rnc.length !== 9) return false;
@@ -557,16 +715,18 @@ export default function Servicios() {
   const [categoriaFiltroEq, setCategoriaFiltroEq] = useState("");
   const [marcaFiltroEq, setMarcaFiltroEq] = useState("");
 
+  // búsqueda (1 por fila)
+  const [search, setSearch] = useState("");
+
   // Carrito persistente entre tabs
   const [carrito, setCarrito] = useState({});
 
   const [mostrarFormularioCot, setMostrarFormularioCot] = useState(false);
   const [tipoCliente, setTipoCliente] = useState("persona"); // persona | empresa
 
-  // Autocomplete
   const [autoLoading, setAutoLoading] = useState(false);
 
-  // Consulta de preventa
+  // Consulta de preventa (banner arriba)
   const [caseNumero, setCaseNumero] = useState("");
   const [caseResult, setCaseResult] = useState(null);
   const [caseLoading, setCaseLoading] = useState(false);
@@ -632,6 +792,10 @@ export default function Servicios() {
   // No borres carrito al cambiar tab
   useEffect(() => {
     setMostrarFormularioCot(false);
+    setSearch("");
+    // opcional: resetea filtros al cambiar tab
+    // setCategoriaFiltroProd(""); setMarcaFiltroProd("");
+    // setCategoriaFiltroEq(""); setMarcaFiltroEq("");
   }, [tab]);
 
   // ========= CARRITO OPS =========
@@ -701,6 +865,12 @@ export default function Servicios() {
     else setMarcaFiltroEq(v);
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setCategoriaFiltro("");
+    setMarcaFiltro("");
+  };
+
   const categorias = useMemo(() => {
     return Array.from(new Set((currentData || []).map((p) => p._cat || "Otros")));
   }, [currentData]);
@@ -716,14 +886,35 @@ export default function Servicios() {
   }, [currentData, categoriaFiltro]);
 
   const filtrados = useMemo(() => {
+    const q = (search || "").trim().toLowerCase();
     return (currentData || []).filter((p) => {
       const cat = p._cat || "Otros";
       const brand = p._brand || "Sin marca";
+
       if (categoriaFiltro && cat !== categoriaFiltro) return false;
       if (marcaFiltro && brand !== marcaFiltro) return false;
+
+      if (q) {
+        const haystack = [
+          p.nombre,
+          p.descripcion,
+          p.modelo,
+          p.marca,
+          p.proveedor,
+          p.categoria,
+          cat,
+          brand,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(q)) return false;
+      }
+
       return true;
     });
-  }, [currentData, categoriaFiltro, marcaFiltro]);
+  }, [currentData, categoriaFiltro, marcaFiltro, search]);
 
   // ========= CONSULTA DE PREVENTA =========
   const handleBuscarCaso = async (e) => {
@@ -831,7 +1022,6 @@ export default function Servicios() {
         return;
       }
 
-      // Empresa
       const rnc = onlyDigits(formEl.elements.empresa_rnc?.value || "");
       if (!validarRNC(rnc)) return;
 
@@ -882,7 +1072,6 @@ export default function Servicios() {
         return null;
       }
 
-      // IMPORTANTE: NO MANDAR empresa_rnc aquí
       const payload = { ...base, cedula: ced };
 
       const { data, error } = await supabase
@@ -899,14 +1088,12 @@ export default function Servicios() {
       return data?.id ?? null;
     }
 
-    // Empresa
     const rnc = onlyDigits(empresa_rnc);
     if (!validarRNC(rnc)) {
       Swal.fire("RNC inválido", "Verifica el RNC antes de continuar.", "warning");
       return null;
     }
 
-    // IMPORTANTE: NO MANDAR cedula aquí
     const payload = { ...base, empresa_rnc: rnc };
 
     const { data, error } = await supabase
@@ -937,7 +1124,6 @@ export default function Servicios() {
       return;
     }
 
-    // Por si no salió del campo documento
     await autocompletarPorDocumento(e.target);
 
     const cliente = e.target.cliente.value.trim();
@@ -954,12 +1140,22 @@ export default function Servicios() {
     const empresa_rnc = tipoCliente === "empresa" ? onlyDigits(empresa_rncRaw) : null;
 
     if (tipoCliente === "persona" && !validarCedula(cedula)) {
-      Swal.fire({ icon: "warning", title: "Cédula inválida", text: "Verifica que la cédula sea válida.", confirmButtonColor: "#0591e9" });
+      Swal.fire({
+        icon: "warning",
+        title: "Cédula inválida",
+        text: "Verifica que la cédula sea válida.",
+        confirmButtonColor: "#0591e9",
+      });
       return;
     }
 
     if (tipoCliente === "empresa" && !validarRNC(empresa_rnc)) {
-      Swal.fire({ icon: "warning", title: "RNC inválido", text: "Verifica que el RNC sea válido.", confirmButtonColor: "#0591e9" });
+      Swal.fire({
+        icon: "warning",
+        title: "RNC inválido",
+        text: "Verifica que el RNC sea válido.",
+        confirmButtonColor: "#0591e9",
+      });
       return;
     }
 
@@ -984,7 +1180,6 @@ export default function Servicios() {
       return;
     }
 
-    // 0) Upsert cliente (crea cuenta indirecta)
     const clienteId = await upsertClienteDesdeFormulario({
       tipoClienteLocal: tipoCliente,
       cliente,
@@ -998,7 +1193,6 @@ export default function Servicios() {
 
     if (!clienteId) return;
 
-    // 1) Crear preventa
     const numero_caso = generarNumeroCaso();
 
     try {
@@ -1017,8 +1211,7 @@ export default function Servicios() {
             direccion,
             nota_cliente: nota || null,
             estado: "enviada",
-            // Si luego agregas cliente_id en preventas:
-            // cliente_id: clienteId,
+            // cliente_id: clienteId, // si luego agregas este campo
           },
         ])
         .select()
@@ -1035,7 +1228,6 @@ export default function Servicios() {
         return;
       }
 
-      // 2) Insertar detalle_preventa
       const detalleRows = carritoItems.map((it) => ({
         preventa_id: p.id,
         producto_id: it.tipo === "producto" ? it.id : null,
@@ -1055,7 +1247,6 @@ export default function Servicios() {
         return;
       }
 
-      // 3) Email opcional
       try {
         await emailjs.send(
           "service_kfvhwxq",
@@ -1124,271 +1315,295 @@ export default function Servicios() {
 
   return (
     <Container>
-      <Title>Catálogo / Solicitud de Cotización</Title>
+      <MaxWidth>
+        <HeaderBlock>
+          <Title>Catálogo / Solicitud de Cotización</Title>
+          <Subtitle>
+            Selecciona cantidades en el catálogo y luego pulsa <strong>Solicitar cotización</strong>. También puedes
+            consultar el estado de tu solicitud con tu número de caso o ID.
+          </Subtitle>
+        </HeaderBlock>
 
-      {/* Consulta de PREVENTA */}
-      <CaseCard>
-        <CaseTitle>Consulta el estado de tu solicitud</CaseTitle>
-        <p style={{ fontSize: "0.85rem", opacity: 0.8, margin: 0 }}>
-          Ingresa tu <strong>número de caso</strong> (ej: <strong>PV-2026-123456-ABCDE</strong>) o tu{" "}
-          <strong>ID</strong> para ver el estado.
-        </p>
+        {/* ✅ CONSULTA ARRIBA (NO LATERAL) */}
+        <CaseCard>
+          <CaseTitle>Consulta el estado de tu solicitud</CaseTitle>
+          <CaseHint>
+            Ingresa tu <strong>número de caso</strong> (ej: <strong>PV-2026-123456-ABCDE</strong>) o tu{" "}
+            <strong>ID</strong>.
+          </CaseHint>
 
-        <CaseForm onSubmit={handleBuscarCaso}>
-          <CaseInput
-            placeholder="Ej: PV-2026-123456-ABCDE o 15"
-            value={caseNumero}
-            onChange={(e) => setCaseNumero(e.target.value)}
-          />
-          <CaseButton type="submit">{caseLoading ? "Buscando..." : "Ver estado"}</CaseButton>
-        </CaseForm>
+          <CaseForm onSubmit={handleBuscarCaso}>
+            <CaseInput
+              placeholder="Ej: PV-2026-123456-ABCDE o 15"
+              value={caseNumero}
+              onChange={(e) => setCaseNumero(e.target.value)}
+            />
+            <CaseButton type="submit">{caseLoading ? "Buscando..." : "Ver estado"}</CaseButton>
+          </CaseForm>
 
-        {caseResult && (
-          <CaseResultBox>
-            {caseResult.notFound ? (
-              <div style={{ fontSize: "0.9rem" }}>
-                No encontramos una solicitud con ese número. Verifica que lo hayas escrito correctamente.
-              </div>
-            ) : (
-              <>
-                <CaseRow>
-                  <span>ID:</span>
-                  <span>{caseResult.id}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Número de caso:</span>
-                  <span>{caseResult.numero_caso}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Cliente:</span>
-                  <span>{caseResult.cliente}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Estado:</span>
-                  <span>
-                    <CaseStatusTag $estado={caseResult.estado}>● {caseResult.estado}</CaseStatusTag>
-                  </span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Creado:</span>
-                  <span>{caseResult.creado_en}</span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Contacto:</span>
-                  <span>
-                    {caseResult.email} / {caseResult.telefono}
-                  </span>
-                </CaseRow>
-                <CaseRow>
-                  <span>Dirección:</span>
-                  <span>{caseResult.direccion}</span>
-                </CaseRow>
-              </>
-            )}
-          </CaseResultBox>
-        )}
-      </CaseCard>
-
-      <CardShell>
-        <Tabs>
-          <TabButton $active={tab === "productos"} onClick={() => setTab("productos")}>
-            Productos
-          </TabButton>
-          <TabButton $active={tab === "equipos"} onClick={() => setTab("equipos")}>
-            Equipos
-          </TabButton>
-        </Tabs>
-
-        <Content initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <SectionHead>
-            <h3>{tab === "productos" ? "Productos" : "Equipos"}</h3>
-            <p>
-              Selecciona cantidades y luego pulsa <strong>Solicitar cotización</strong>.
-            </p>
-          </SectionHead>
-
-          <FiltersRow>
-            <SelectFilter value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
-              <option value="">Todas las categorías</option>
-              {categorias.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </SelectFilter>
-
-            <SelectFilter value={marcaFiltro} onChange={(e) => setMarcaFiltro(e.target.value)}>
-              <option value="">Todas las marcas</option>
-              {marcas.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </SelectFilter>
-          </FiltersRow>
-
-          {loadingCurrent ? (
-            <p>Cargando {tab}...</p>
-          ) : filtrados.length === 0 ? (
-            <p>No hay {tab} publicados por el momento.</p>
-          ) : (
-            <ProductGrid>
-              {filtrados.map((p) => {
-                const key = makeKey(tipoActual, p.id);
-                const qty = carrito[key]?.qty || 0;
-                const imgSrc = p._img || "/placeholder-product.png";
-
-                return (
-                  <ProductCard key={p.id} $selected={qty > 0}>
-                    <ImgWrap>
-                      <ImgCover
-                        src={imgSrc}
-                        alt={p.nombre}
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder-product.png";
-                        }}
-                      />
-                      <ImgContain
-                        src={imgSrc}
-                        alt={p.nombre}
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder-product.png";
-                        }}
-                      />
-                    </ImgWrap>
-
-                    <ProductBody>
-                      <ProductTitle>{p.nombre}</ProductTitle>
-
-                      <div style={{ marginBottom: "0.35rem" }}>
-                        {p._cat && <ProductTag>{p._cat}</ProductTag>}
-                        {p._brand && <ProductTag>{p._brand}</ProductTag>}
-                      </div>
-
-                      {p.descripcion && <ProductDesc>{p.descripcion}</ProductDesc>}
-
-                      {p.modelo && (
-                        <div style={{ fontSize: "0.82rem", opacity: 0.85, marginTop: "0.35rem" }}>
-                          Modelo: {p.modelo}
-                        </div>
-                      )}
-
-                      <QtyRow>
-                        <QtyControls>
-                          <QtyBtn
-                            type="button"
-                            onClick={() => removeOne(tipoActual, p.id)}
-                            disabled={qty === 0}
-                            title="Quitar"
-                          >
-                            −
-                          </QtyBtn>
-
-                          <QtyInput
-                            type="number"
-                            min="0"
-                            value={qty}
-                            onChange={(e) => setQty(tipoActual, p, e.target.value)}
-                          />
-
-                          <QtyBtn type="button" onClick={() => addOne(tipoActual, p)} title="Agregar">
-                            +
-                          </QtyBtn>
-                        </QtyControls>
-
-                        <AddBtn type="button" onClick={() => addOne(tipoActual, p)}>
-                          Agregar
-                        </AddBtn>
-                      </QtyRow>
-                    </ProductBody>
-                  </ProductCard>
-                );
-              })}
-            </ProductGrid>
-          )}
-
-          {/* Form preventa */}
-          <AnimatePresence>
-            {mostrarFormularioCot && (
-              <FormPanel
-                onSubmit={handleSubmitCotizacion}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.25 }}
-              >
-                <div style={{ fontSize: "0.9rem", fontWeight: 800 }}>
-                  Estás solicitando cotización para:{" "}
-                  <span style={{ color: "#0591e9" }}>
-                    {carritoItems.map((x) => `${x.nombre} x${x.qty}`).join(", ")}
-                  </span>
+          {caseResult && (
+            <CaseResultBox>
+              {caseResult.notFound ? (
+                <div style={{ fontSize: "0.92rem" }}>
+                  No encontramos una solicitud con ese número. Verifica que lo hayas escrito correctamente.
                 </div>
+              ) : (
+                <>
+                  <CaseRow>
+                    <span>ID:</span>
+                    <span>{caseResult.id}</span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Número de caso:</span>
+                    <span>{caseResult.numero_caso}</span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Cliente:</span>
+                    <span>{caseResult.cliente}</span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Estado:</span>
+                    <span>
+                      <CaseStatusTag $estado={caseResult.estado}>● {caseResult.estado}</CaseStatusTag>
+                    </span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Creado:</span>
+                    <span>{caseResult.creado_en}</span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Contacto:</span>
+                    <span>
+                      {caseResult.email} / {caseResult.telefono}
+                    </span>
+                  </CaseRow>
+                  <CaseRow>
+                    <span>Dirección:</span>
+                    <span>{caseResult.direccion}</span>
+                  </CaseRow>
+                </>
+              )}
+            </CaseResultBox>
+          )}
+        </CaseCard>
 
-                <TipoClienteRow>
-                  <span style={{ fontWeight: 700 }}>¿Quién solicita la cotización?</span>
+        {/* ✅ CATÁLOGO ABAJO A ANCHO COMPLETO */}
+        <CardShell>
+          <Tabs>
+            <TabButton $active={tab === "productos"} onClick={() => setTab("productos")}>
+              Productos
+            </TabButton>
+            <TabButton $active={tab === "equipos"} onClick={() => setTab("equipos")}>
+              Equipos
+            </TabButton>
+          </Tabs>
 
-                  <label>
-                    <input
-                      type="radio"
-                      name="tipo_cliente"
-                      value="persona"
-                      checked={tipoCliente === "persona"}
-                      onChange={() => setTipoCliente("persona")}
-                    />
-                    Persona
-                  </label>
+          <Content initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <SectionHead>
+              <h3>{tab === "productos" ? "Productos" : "Equipos"}</h3>
+              <p>
+                Usa búsqueda/filtros y ajusta cantidades. Lo seleccionado se verá en la barra inferior.
+              </p>
+            </SectionHead>
 
-                  <label>
-                    <input
-                      type="radio"
-                      name="tipo_cliente"
-                      value="empresa"
-                      checked={tipoCliente === "empresa"}
-                      onChange={() => setTipoCliente("empresa")}
-                    />
-                    Empresa
-                  </label>
-                </TipoClienteRow>
+            {/* ✅ FILTROS 1 POR FILA, HACIA ABAJO */}
+            <FiltersStack>
+              <SearchInput
+                placeholder="Buscar (nombre, descripción, modelo, marca, categoría)…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
 
-                {/* Documento primero para autocompletar */}
-                {tipoCliente === "persona" && (
-                  <Input
-                    name="cedula"
-                    placeholder="Cédula (ej: 001-1234567-8)"
-                    required
-                    onBlur={(e) => autocompletarPorDocumento(e.currentTarget.form)}
-                  />
-                )}
+              <SelectFilter value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
+                <option value="">Todas las categorías</option>
+                {categorias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </SelectFilter>
 
-                {tipoCliente === "empresa" && (
-                  <>
+              <SelectFilter value={marcaFiltro} onChange={(e) => setMarcaFiltro(e.target.value)}>
+                <option value="">Todas las marcas</option>
+                {marcas.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </SelectFilter>
+
+              <FiltersMetaRow>
+                <ClearFiltersBtn type="button" onClick={clearFilters}>
+                  Limpiar filtros
+                </ClearFiltersBtn>
+                <MetaPill>Mostrando: {filtrados.length}</MetaPill>
+              </FiltersMetaRow>
+            </FiltersStack>
+
+            {loadingCurrent ? (
+              <p style={{ marginTop: "1.1rem" }}>Cargando {tab}...</p>
+            ) : filtrados.length === 0 ? (
+              <p style={{ marginTop: "1.1rem" }}>No hay {tab} publicados por el momento.</p>
+            ) : (
+              <ProductGrid>
+                {filtrados.map((p) => {
+                  const key = makeKey(tipoActual, p.id);
+                  const qty = carrito[key]?.qty || 0;
+                  const imgSrc = p._img || "/placeholder-product.png";
+
+                  return (
+                    <ProductCard key={p.id} $selected={qty > 0}>
+                      <ImgWrap>
+                        <ImgCover
+                          src={imgSrc}
+                          alt={p.nombre}
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder-product.png";
+                          }}
+                        />
+                        <ImgContain
+                          src={imgSrc}
+                          alt={p.nombre}
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder-product.png";
+                          }}
+                        />
+                      </ImgWrap>
+
+                      <ProductBody>
+                        <ProductTitle>{p.nombre}</ProductTitle>
+
+                        <div style={{ marginBottom: "0.35rem" }}>
+                          {p._cat && <ProductTag>{p._cat}</ProductTag>}
+                          {p._brand && <ProductTag>{p._brand}</ProductTag>}
+                        </div>
+
+                        {p.descripcion && <ProductDesc>{p.descripcion}</ProductDesc>}
+
+                        {p.modelo && (
+                          <div style={{ fontSize: "0.86rem", opacity: 0.85, marginTop: "0.4rem", fontWeight: 700 }}>
+                            Modelo: {p.modelo}
+                          </div>
+                        )}
+
+                        <QtyRow>
+                          <QtyControls>
+                            <QtyBtn
+                              type="button"
+                              onClick={() => removeOne(tipoActual, p.id)}
+                              disabled={qty === 0}
+                              title="Quitar"
+                            >
+                              −
+                            </QtyBtn>
+
+                            <QtyInput
+                              type="number"
+                              min="0"
+                              value={qty}
+                              onChange={(e) => setQty(tipoActual, p, e.target.value)}
+                            />
+
+                            <QtyBtn type="button" onClick={() => addOne(tipoActual, p)} title="Agregar">
+                              +
+                            </QtyBtn>
+                          </QtyControls>
+
+                          <AddBtn type="button" onClick={() => addOne(tipoActual, p)}>
+                            Agregar
+                          </AddBtn>
+                        </QtyRow>
+                      </ProductBody>
+                    </ProductCard>
+                  );
+                })}
+              </ProductGrid>
+            )}
+
+            {/* Form preventa */}
+            <AnimatePresence>
+              {mostrarFormularioCot && (
+                <FormPanel
+                  onSubmit={handleSubmitCotizacion}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <div style={{ fontSize: "0.95rem", fontWeight: 900 }}>
+                    Estás solicitando cotización para:{" "}
+                    <span style={{ color: "#0591e9" }}>
+                      {carritoItems.map((x) => `${x.nombre} x${x.qty}`).join(", ")}
+                    </span>
+                  </div>
+
+                  <TipoClienteRow>
+                    <span style={{ fontWeight: 900 }}>¿Quién solicita la cotización?</span>
+
+                    <label>
+                      <input
+                        type="radio"
+                        name="tipo_cliente"
+                        value="persona"
+                        checked={tipoCliente === "persona"}
+                        onChange={() => setTipoCliente("persona")}
+                      />
+                      Persona
+                    </label>
+
+                    <label>
+                      <input
+                        type="radio"
+                        name="tipo_cliente"
+                        value="empresa"
+                        checked={tipoCliente === "empresa"}
+                        onChange={() => setTipoCliente("empresa")}
+                      />
+                      Empresa
+                    </label>
+                  </TipoClienteRow>
+
+                  {tipoCliente === "persona" && (
                     <Input
-                      name="empresa_rnc"
-                      placeholder="RNC / Identificación fiscal (9 dígitos)"
+                      name="cedula"
+                      placeholder="Cédula (ej: 001-1234567-8)"
                       required
                       onBlur={(e) => autocompletarPorDocumento(e.currentTarget.form)}
                     />
-                    <Input name="empresa_nombre" placeholder="Nombre o razón social de la empresa" required />
-                  </>
-                )}
+                  )}
 
-                <Input name="cliente" placeholder="Tu nombre completo" required />
-                <Input name="email" type="email" placeholder="Tu correo electrónico" required />
-                <Input name="telefono" placeholder="Tu número de teléfono" required />
-                <Input name="direccion" placeholder="Dirección" required />
+                  {tipoCliente === "empresa" && (
+                    <>
+                      <Input
+                        name="empresa_rnc"
+                        placeholder="RNC / Identificación fiscal (9 dígitos)"
+                        required
+                        onBlur={(e) => autocompletarPorDocumento(e.currentTarget.form)}
+                      />
+                      <Input name="empresa_nombre" placeholder="Nombre o razón social de la empresa" required />
+                    </>
+                  )}
 
-                {autoLoading && (
-                  <div style={{ fontSize: "0.85rem", opacity: 0.75 }}>Autocompletando datos del cliente...</div>
-                )}
+                  <Input name="cliente" placeholder="Tu nombre completo" required />
+                  <Input name="email" type="email" placeholder="Tu correo electrónico" required />
+                  <Input name="telefono" placeholder="Tu número de teléfono" required />
+                  <Input name="direccion" placeholder="Dirección" required />
 
-                <TextArea name="nota" rows="3" placeholder="Notas (opcional): entrega, detalles, etc." />
+                  {autoLoading && (
+                    <div style={{ fontSize: "0.88rem", opacity: 0.75, fontWeight: 700 }}>
+                      Autocompletando datos del cliente...
+                    </div>
+                  )}
 
-                <Button type="submit">Enviar solicitud</Button>
-              </FormPanel>
-            )}
-          </AnimatePresence>
-        </Content>
-      </CardShell>
+                  <TextArea name="nota" rows="3" placeholder="Notas (opcional): entrega, detalles, etc." />
+
+                  <Button type="submit">Enviar solicitud</Button>
+                </FormPanel>
+              )}
+            </AnimatePresence>
+          </Content>
+        </CardShell>
+      </MaxWidth>
 
       <StickyBar>
         <StickyInner>

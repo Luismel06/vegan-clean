@@ -12,6 +12,10 @@ const Wrapper = styled.div`
   padding: 2rem;
   display: flex;
   justify-content: center;
+
+  @media (max-width: 520px) {
+    padding: 1rem;
+  }
 `;
 
 const Card = styled.div`
@@ -21,7 +25,13 @@ const Card = styled.div`
   padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+
+  @media (max-width: 520px) {
+    padding: 1rem;
+    border-radius: 10px;
+  }
 `;
+
 
 const Title = styled.h1`
   text-align: center;
@@ -44,12 +54,36 @@ const InfoRow = styled.div`
   justify-content: space-between;
   gap: 14px;
   font-size: 1rem;
+  > * {
+    min-width: 0;
+  }
+
+  @media (max-width: 520px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 0.95rem;
+  }
 `;
+
+const TableWrap = styled.div`
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+
+  scrollbar-width: thin;
+`;
+
+
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
+
+
+  min-width: 560px;
 
   th,
   td {
@@ -57,12 +91,25 @@ const Table = styled.table`
     border-bottom: 1px solid ${({ theme }) => theme.border};
     text-align: left;
     vertical-align: top;
+
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   th {
     background: ${({ theme }) => theme.inputBackground};
+    white-space: nowrap;
+  }
+
+  @media (max-width: 520px) {
+    th,
+    td {
+      padding: 0.65rem;
+      font-size: 0.9rem;
+    }
   }
 `;
+
 
 const TotalBox = styled.div`
   margin-top: 2rem;
@@ -111,7 +158,26 @@ const Button = styled.button`
   }
 `;
 
-// ✅ Fix warning styled-components: usar transient prop $estado
+const ActionsBar = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+
+  /* Los botones se distribuyen mejor sin cambiar su estilo inline */
+  button {
+    flex: 1 1 160px;
+  }
+
+  @media (max-width: 520px) {
+    button {
+      flex: 1 1 100%;
+      width: 100%;
+    }
+  }
+`;
+
+
 const EstadoBadge = styled.span`
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
@@ -879,6 +945,7 @@ export default function VistaCotizacion() {
           </span>
         </InfoRow>
 
+<ActionsBar>
         <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
           <button
             onClick={() => cambiarEstado("aceptada")}
@@ -949,9 +1016,10 @@ export default function VistaCotizacion() {
           </span>
           <span>{cotizacion.fecha ? new Date(cotizacion.fecha).toLocaleString() : "-"}</span>
         </InfoRow>
+        </ActionsBar>
 
         <SectionTitle>Items Cotizados</SectionTitle>
-
+<TableWrap>
         <Table>
           <thead>
             <tr>
@@ -988,7 +1056,7 @@ export default function VistaCotizacion() {
             })}
           </tbody>
         </Table>
-
+</TableWrap>
         {editMode && (
           <>
             <SectionTitle>Editar (cantidades / extra / descuento)</SectionTitle>

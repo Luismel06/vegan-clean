@@ -396,8 +396,12 @@ const MobileCartBar = styled.div`
     position: fixed;
     left: 12px;
     right: 12px;
-    bottom: 12px;
-    z-index: 2500;
+
+    /* ✅ SUBIDO para NO tapar el BottomNav del layout */
+    bottom: calc(12px + 64px + 10px);
+
+    /* ✅ menor que el BottomNav del layout */
+    z-index: 1900;
 
     border: 1px solid ${({ theme }) => theme.border};
     border-radius: 18px;
@@ -465,7 +469,8 @@ const MobileSafeSpace = styled.div`
   display: none;
   @media (max-width: 900px) {
     display: block;
-    height: 92px; /* para que el contenido no quede tapado por el carrito fijo */
+    /* ✅ espacio para Carrito + gap + BottomNav + gap */
+    height: 170px;
   }
 `;
 
@@ -682,7 +687,7 @@ export default function VendedorCatalogo() {
   const [cart, setCart] = useState(() => loadCart());
   const [qtyDraft, setQtyDraft] = useState({});
 
-  // NEW: search + filters
+  // search + filters
   const [q, setQ] = useState("");
   const [fCategoria, setFCategoria] = useState("");
   const [fMarca, setFMarca] = useState("");
@@ -725,7 +730,6 @@ export default function VendedorCatalogo() {
 
   const list = useMemo(() => (tab === "productos" ? productos : equipos), [tab, productos, equipos]);
 
-  // NEW: options for filters
   const categorias = useMemo(() => {
     const set = new Set();
     for (const it of list) if (it?.categoria) set.add(String(it.categoria).trim());
@@ -738,18 +742,11 @@ export default function VendedorCatalogo() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
   }, [list]);
 
-  // NEW: filtered list
   const filtered = useMemo(() => {
     const qq = String(q || "").toLowerCase().trim();
 
     let arr = (list || []).filter((it) => {
-      const hay = [
-        it.nombre,
-        it.marca,
-        it.modelo,
-        it.categoria,
-        `id:${it.id}`,
-      ]
+      const hay = [it.nombre, it.marca, it.modelo, it.categoria, `id:${it.id}`]
         .map((x) => String(x ?? "").toLowerCase())
         .join(" | ");
 
@@ -759,7 +756,6 @@ export default function VendedorCatalogo() {
       return true;
     });
 
-    // order
     if (fOrden === "precio_asc") {
       arr = arr.slice().sort((a, b) => Number(a?.precio || 0) - Number(b?.precio || 0));
     } else if (fOrden === "precio_desc") {
@@ -769,12 +765,10 @@ export default function VendedorCatalogo() {
         String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es")
       );
     }
-    // "recientes" ya viene por id desc desde supabase
     return arr;
   }, [list, q, fCategoria, fMarca, fOrden]);
 
   useEffect(() => {
-    // si cambias de tab, resetea filtros que no existan
     setFCategoria("");
     setFMarca("");
     setFOrden("recientes");
@@ -973,9 +967,7 @@ export default function VendedorCatalogo() {
       <TopBar>
         <div>
           <Title>Catálogo vendedor</Title>
-          <Sub>
-            Busca, filtra y agrega ítems al carrito. El carrito permanece visible en laptop y en mobile.
-          </Sub>
+          <Sub>Busca, filtra y agrega ítems al carrito. El carrito permanece visible en laptop y en mobile.</Sub>
         </div>
 
         <RightControls>
@@ -991,7 +983,6 @@ export default function VendedorCatalogo() {
         </RightControls>
       </TopBar>
 
-      {/* Search + Filters */}
       <ControlsBar>
         <SearchBox>
           <Search size={18} />
@@ -1048,14 +1039,11 @@ export default function VendedorCatalogo() {
       ) : null}
 
       <MainGrid>
-        {/* Catalog */}
         <div>
           {loading ? (
             <div style={{ marginTop: 12, opacity: 0.8 }}>Cargando...</div>
           ) : filtered.length === 0 ? (
-            <div style={{ marginTop: 12, opacity: 0.8 }}>
-              No hay resultados con los filtros actuales.
-            </div>
+            <div style={{ marginTop: 12, opacity: 0.8 }}>No hay resultados con los filtros actuales.</div>
           ) : (
             <Grid>
               {filtered.map((it) => {
@@ -1099,9 +1087,7 @@ export default function VendedorCatalogo() {
                           type="number"
                           min="1"
                           value={qtyDraft[k] ?? 1}
-                          onChange={(e) =>
-                            setQtyDraft((p) => ({ ...p, [k]: Number(e.target.value) }))
-                          }
+                          onChange={(e) => setQtyDraft((p) => ({ ...p, [k]: Number(e.target.value) }))}
                         />
                         <Btn onClick={() => addToCart(tipoActual, it)}>Agregar</Btn>
                       </Actions>
@@ -1112,18 +1098,15 @@ export default function VendedorCatalogo() {
             </Grid>
           )}
 
-          {/* espacio para mobile cart fijo */}
           <MobileSafeSpace />
         </div>
 
-        {/* Sticky cart (desktop/tablet) */}
         <CartPanel>
           <CartHeader>
             <div>
               <CartTitle>Carrito</CartTitle>
               <CartSub>
-                Ítems: <strong>{cartCount}</strong> · Subtotal:{" "}
-                <strong>{formatRD(cartSubtotal)}</strong>
+                Ítems: <strong>{cartCount}</strong> · Subtotal: <strong>{formatRD(cartSubtotal)}</strong>
               </CartSub>
             </div>
             <div style={{ opacity: 0.85, fontWeight: 1000 }}>
@@ -1133,9 +1116,7 @@ export default function VendedorCatalogo() {
 
           <CartList>
             {cart.length === 0 ? (
-              <div style={{ opacity: 0.85, padding: "6px 2px" }}>
-                Aún no has agregado ítems.
-              </div>
+              <div style={{ opacity: 0.85, padding: "6px 2px" }}>Aún no has agregado ítems.</div>
             ) : (
               cart.map((x, idx) => (
                 <CartItem key={`${x.tipo}-${x.item_id}-${idx}`}>
@@ -1157,9 +1138,7 @@ export default function VendedorCatalogo() {
                     </CartItemRight>
                   </CartItemTop>
 
-                  <RemoveBtn onClick={() => removeFromCart(x.tipo, x.item_id)}>
-                    Quitar
-                  </RemoveBtn>
+                  <RemoveBtn onClick={() => removeFromCart(x.tipo, x.item_id)}>Quitar</RemoveBtn>
                 </CartItem>
               ))
             )}
@@ -1183,7 +1162,6 @@ export default function VendedorCatalogo() {
         </CartPanel>
       </MainGrid>
 
-      {/* Mobile always-visible cart bar */}
       <MobileCartBar>
         <MobileCartLeft>
           <MobileCartIcon>

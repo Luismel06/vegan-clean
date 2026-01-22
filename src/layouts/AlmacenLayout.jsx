@@ -290,12 +290,7 @@ const BottomNav = styled.nav`
     z-index: 2000;
 
     backdrop-filter: blur(18px) saturate(180%);
-    -webkit-backdrop-filter: blur(18px) saturate(180%);
-    background: ${({ theme }) =>
-      theme.name === "dark"
-        ? "rgba(18, 18, 18, 0.70)"
-        : "rgba(255, 255, 255, 0.70)"};
-
+    background-color: ${({ theme }) => theme.cardBackground};
     border: 1px solid ${({ theme }) => theme.border};
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.20);
     overflow-x: auto;

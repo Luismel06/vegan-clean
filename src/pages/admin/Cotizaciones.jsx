@@ -1,116 +1,433 @@
 // src/pages/admin/Cotizaciones.jsx
 import { useEffect, useMemo, useState } from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import { Eye, Trash2 } from "lucide-react";
+import { Eye, Trash2, Search, RefreshCw, Plus, FileText, Tag, Boxes, Package, ShieldCheck, Clock3 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-const Wrapper = styled.div`
-  padding: 2rem;
+/* =========================
+   Animations
+========================= */
+const shimmer = keyframes`
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 `;
 
-const Form = styled.form`
+/* =========================
+   Layout
+========================= */
+const Wrapper = styled.section`
+  width: 100%;
+  color: ${({ theme }) => theme.text};
+`;
+
+const Container = styled.div`
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 2.2rem;
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+`;
+
+const HeaderLeft = styled.div`
+  min-width: 260px;
+
+  h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 950;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.heading};
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  p {
+    margin: 0.35rem 0 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.88)};
+    max-width: 80ch;
+  }
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+/* =========================
+   Buttons
+========================= */
+const BtnBase = styled.button`
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.68rem 0.95rem;
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+  &:focus-visible {
+    outline: 3px solid ${({ theme }) => theme.accentSoft};
+    outline-offset: 3px;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const PrimaryBtn = styled(BtnBase)`
+  background: ${({ theme }) => theme.accent};
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+`;
+
+const GhostBtn = styled(BtnBase)`
   background: ${({ theme }) => theme.cardBackground};
-  padding: 1.5rem;
-  border-radius: 10px;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  border-color: ${({ theme }) => theme.border};
+  color: ${({ theme }) => theme.text};
+
+  &:hover {
+    border-color: ${({ theme }) => theme.accent};
+  }
+`;
+
+/* =========================
+   Cards / sections
+========================= */
+const Card = styled.div`
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 22px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, ${({ theme }) => (theme.mode === "dark" ? 0.18 : 0.08)});
+`;
+
+const FormCard = styled(Card)`
+  padding: 1.05rem;
+`;
+
+const Row = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+`;
+
+const Split = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const Field = styled.div`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  border-radius: 18px;
+  padding: 0.85rem 0.95rem;
+  min-width: 0;
+`;
+
+const Full = styled(Field)`
+  grid-column: 1 / -1;
+`;
+
+const Label = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.86)};
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 0.7rem;
-  margin: 0.5rem 0;
+  margin-top: 0.45rem;
+  padding: 0.78rem 0.9rem;
+  border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
-  border-radius: 6px;
-  background: ${({ theme }) => theme.inputBackground};
-  color: ${({ theme }) => theme.accent2};
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  font-weight: 800;
+
+  &::placeholder {
+    opacity: 0.6;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
+  }
 `;
 
 const Select = styled.select`
   width: 100%;
-  padding: 0.7rem;
-  margin: 0.5rem 0;
+  margin-top: 0.45rem;
+  padding: 0.78rem 0.9rem;
+  border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
-  border-radius: 6px;
-  background: ${({ theme }) => theme.inputBackground};
-  color: ${({ theme }) => theme.accent2};
-`;
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  font-weight: 800;
 
-const Button = styled.button`
-  background-color: ${({ theme }) => theme.accent};
-  border: none;
-  border-radius: 8px;
-  padding: 0.7rem 1.2rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.3s;
-  margin-top: 1rem;
-
-  &:hover {
-    opacity: 0.9;
-    transform: scale(1.03);
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    transform: none;
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.accent};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.accentSoft};
   }
 `;
 
 const Divider = styled.hr`
   border: none;
   border-top: 1px solid ${({ theme }) => theme.border};
-  margin: 1.5rem 0;
+  margin: 0.95rem 0;
+`;
+
+const Muted = styled.div`
+  font-size: 0.92rem;
+  opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.88)};
+  line-height: 1.45;
+`;
+
+const InfoBanner = styled.div`
+  margin-top: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 18px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const MiniStack = styled.div`
+  display: grid;
+  gap: 0.15rem;
+`;
+
+const Badge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+  font-weight: 950;
+  font-size: 0.84rem;
+  opacity: 0.95;
+`;
+
+const Pill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  font-weight: 950;
+  font-size: 0.82rem;
+  width: fit-content;
+`;
+
+const DangerBtn = styled(BtnBase)`
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border-color: ${({ theme }) => theme.border};
+  color: #e53935;
+
+  &:hover {
+    border-color: #e53935;
+  }
+`;
+
+const IconBtn = styled.button`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+  color: ${({ theme }) => theme.text};
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.accent};
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+`;
+
+/* =========================
+   Tables (desktop) + cards (mobile)
+========================= */
+const TableWrap = styled.div`
+  width: 100%;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
+  min-width: 920px;
 
   th,
   td {
-    padding: 0.8rem;
+    padding: 0.85rem 0.95rem;
     border-bottom: 1px solid ${({ theme }) => theme.border};
+    vertical-align: top;
+    text-align: left;
+    font-size: 0.94rem;
   }
 
   th {
-    background: ${({ theme }) => theme.cardBackground};
+    font-weight: 950;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    background: ${({ theme }) => theme.background};
   }
 
-  tr:hover {
-    background: ${({ theme }) => theme.hover};
+  tr:hover td {
+    background: ${({ theme }) => theme.background};
+  }
+`;
+
+const RowActions = styled.div`
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const MobileList = styled.div`
+  display: none;
+  margin-top: 0.8rem;
+  gap: 0.8rem;
+
+  @media (max-width: 820px) {
+    display: grid;
+  }
+`;
+
+const MobileCard = styled(Card)`
+  padding: 0.95rem 1rem;
+  display: grid;
+  gap: 0.6rem;
+`;
+
+const MobileHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+`;
+
+const MobileTitle = styled.div`
+  display: grid;
+  gap: 0.15rem;
+
+  strong {
+    font-weight: 950;
+    color: ${({ theme }) => theme.heading};
   }
 
-  .delete-btn {
-    cursor: pointer;
-    color: #d9534f;
-    transition: 0.2s;
+  span {
+    font-size: 0.9rem;
+    opacity: 0.86;
   }
+`;
 
-  .delete-btn:hover {
-    color: #ff0000;
+const MobileMeta = styled.div`
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const DesktopOnly = styled.div`
+  @media (max-width: 820px) {
+    display: none;
   }
+`;
+
+const Skeleton = styled.div`
+  height: 74px;
+  border-radius: 18px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  background-image: linear-gradient(
+    90deg,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)")} 0%,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)")} 50%,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)")} 100%
+  );
+  background-size: 200% 100%;
+  animation: ${shimmer} 1.35s ease infinite;
 `;
 
 const EstadoBadge = styled.span`
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 950;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-
+  gap: 0.35rem;
+  border: 1px solid ${({ theme }) => theme.border};
   background-color: ${({ estado }) =>
     estado === "aceptada"
-      ? "rgba(46, 204, 113, 0.18)"
+      ? "rgba(46, 204, 113, 0.16)"
       : estado === "rechazada"
-      ? "rgba(231, 76, 60, 0.15)"
+      ? "rgba(231, 76, 60, 0.14)"
       : "rgba(241, 196, 15, 0.18)"};
-
   color: ${({ estado }) =>
     estado === "aceptada"
       ? "#27ae60"
@@ -119,21 +436,18 @@ const EstadoBadge = styled.span`
       : "#b7950b"};
 `;
 
-// ===================== HELPERS =====================
+/* ===================== HELPERS ===================== */
 function formatearEstado(estado) {
   if (!estado) return "Pendiente";
   return estado.charAt(0).toUpperCase() + estado.slice(1);
 }
-
 function safeNumber(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
-
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
-
 function labelCliente(cli) {
   if (!cli) return "-";
   if (cli.tipo_cliente === "empresa") {
@@ -141,18 +455,14 @@ function labelCliente(cli) {
   }
   return `${cli.nombre || "-"} (Cédula: ${cli.cedula || "-"})`;
 }
-
 async function buscarClientePorDocumento({ tipo, documento }) {
   const doc = onlyDigits(documento);
-
   if (!doc) return null;
 
   if (tipo === "persona") {
     const { data, error } = await supabase
       .from("clientes")
-      .select(
-        "id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar"
-      )
+      .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar")
       .eq("cedula", doc)
       .maybeSingle();
     if (error) throw error;
@@ -161,19 +471,18 @@ async function buscarClientePorDocumento({ tipo, documento }) {
 
   const { data, error } = await supabase
     .from("clientes")
-    .select(
-      "id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar"
-    )
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, es_recurrente, puede_fiar")
     .eq("empresa_rnc", doc)
     .maybeSingle();
   if (error) throw error;
   return data || null;
 }
 
+/* =========================
+   Component
+========================= */
 export default function Cotizaciones() {
   const [searchParams] = useSearchParams();
-
-  // URL: /admin/cotizaciones?preventa=1
   const preventaIdFromUrl = searchParams.get("preventa");
 
   // snapshot (opcional)
@@ -185,13 +494,13 @@ export default function Cotizaciones() {
   const [equipos, setEquipos] = useState([]);
 
   // Buscar cliente por documento
-  const [tipoCliente, setTipoCliente] = useState("persona"); // persona | empresa
-  const [doc, setDoc] = useState(""); // cedula o rnc
+  const [tipoCliente, setTipoCliente] = useState("persona");
+  const [doc, setDoc] = useState("");
   const [clienteSel, setClienteSel] = useState(null);
   const [clienteLoading, setClienteLoading] = useState(false);
 
   // Selector tipo + item
-  const [tipoItem, setTipoItem] = useState("producto"); // "producto" | "equipo"
+  const [tipoItem, setTipoItem] = useState("producto");
   const [itemSeleccionado, setItemSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState(1);
 
@@ -203,6 +512,7 @@ export default function Cotizaciones() {
 
   // Historial
   const [cotizaciones, setCotizaciones] = useState([]);
+  const [historySearch, setHistorySearch] = useState("");
 
   // Plan 50/50
   const [usaAnticipo, setUsaAnticipo] = useState(false);
@@ -224,7 +534,7 @@ export default function Cotizaciones() {
   const navigate = useNavigate();
 
   // ========= Bloqueo precios en vendedor =========
-  const role = localStorage.getItem("rol") || ""; // "admin" | "vendedor"
+  const role = localStorage.getItem("rol") || "";
   const isVendedor = role === "vendedor";
   const allowPriceEdit = !isVendedor;
 
@@ -235,7 +545,6 @@ export default function Cotizaciones() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Preload si viene por URL
   useEffect(() => {
     if (!preventaIdFromUrl) return;
     setPreventaSeleccionada(String(preventaIdFromUrl));
@@ -257,7 +566,6 @@ export default function Cotizaciones() {
   }
 
   async function fetchCotizaciones() {
-    // Traer join con clientes para mostrar en historial
     const { data, error } = await supabase
       .from("cotizaciones")
       .select(
@@ -275,7 +583,6 @@ export default function Cotizaciones() {
   }
 
   async function fetchPreventas() {
-    // Traer cliente_id para poder auto-vincular
     const { data, error } = await supabase
       .from("preventas")
       .select("id, numero_caso, cliente, estado, creado_en, tipo_cliente, email, telefono, cedula, empresa_rnc, cliente_id")
@@ -300,7 +607,6 @@ export default function Cotizaciones() {
       }
       setClienteSel(cli);
       setCliente(cli.nombre || "");
-      // si el cliente encontrado es empresa/persona, sincroniza el tipo
       setTipoCliente(cli.tipo_cliente || tipoCliente);
     } catch (e) {
       console.error(e);
@@ -310,31 +616,22 @@ export default function Cotizaciones() {
     }
   }
 
-  // ===================== PRELOAD DESDE PREVENTA =====================
+  /* ===================== PRELOAD DESDE PREVENTA (misma lógica tuya) ===================== */
   async function preloadDesdePreventa(preventaId) {
     if (!preventaId || Number.isNaN(preventaId)) return;
 
     setLoadingPreventa(true);
 
     try {
-      // 1) Cabecera preventa (incluye cliente_id)
-      const { data: p, error: errPrev } = await supabase
-        .from("preventas")
-        .select("*")
-        .eq("id", preventaId)
-        .single();
-
+      const { data: p, error: errPrev } = await supabase.from("preventas").select("*").eq("id", preventaId).single();
       if (errPrev) throw errPrev;
       if (!p) throw new Error("Preventa no encontrada");
 
       setPreventaCargada(p);
 
-      // snapshot texto (fallback)
       if (!cliente) setCliente(p.cliente || "");
 
-      // 1.1) Intentar cargar clienteSel desde cliente_id o documento
       try {
-        // a) por cliente_id
         if (p.cliente_id) {
           const { data: cli, error: errCli } = await supabase
             .from("clientes")
@@ -346,11 +643,10 @@ export default function Cotizaciones() {
           if (cli) {
             setClienteSel(cli);
             setTipoCliente(cli.tipo_cliente || p.tipo_cliente || "persona");
-            setDoc(cli.tipo_cliente === "empresa" ? (cli.empresa_rnc || "") : (cli.cedula || ""));
+            setDoc(cli.tipo_cliente === "empresa" ? cli.empresa_rnc || "" : cli.cedula || "");
             setCliente(cli.nombre || p.cliente || "");
           }
         } else {
-          // b) por documento en preventa (si no hay cliente_id)
           if (p.tipo_cliente === "empresa" && p.empresa_rnc) {
             setTipoCliente("empresa");
             setDoc(p.empresa_rnc);
@@ -373,7 +669,6 @@ export default function Cotizaciones() {
         console.warn("⚠️ No se pudo auto-vincular cliente desde preventa:", e);
       }
 
-      // 2) Detalle preventa
       const { data: detPrev, error: errDet } = await supabase
         .from("detalle_preventa")
         .select("id, preventa_id, producto_id, equipo_id, cantidad")
@@ -392,7 +687,6 @@ export default function Cotizaciones() {
         return;
       }
 
-      // 3) Cargar datos de productos/equipos usados
       const productoIds = Array.from(new Set(rows.filter((r) => r.producto_id != null).map((r) => r.producto_id)));
       const equipoIds = Array.from(new Set(rows.filter((r) => r.equipo_id != null).map((r) => r.equipo_id)));
 
@@ -411,7 +705,6 @@ export default function Cotizaciones() {
       const prodMap = new Map((prodsData || []).map((x) => [x.id, x]));
       const eqMap = new Map((eqsData || []).map((x) => [x.id, x]));
 
-      // 4) Mapear a pre-cotización
       const precargado = rows.map((r) => {
         const isProd = r.producto_id != null;
         const item = isProd ? prodMap.get(r.producto_id) : eqMap.get(r.equipo_id);
@@ -448,7 +741,7 @@ export default function Cotizaciones() {
     }
   }
 
-  // ===================== filtros catálogo =====================
+  /* ===================== filtros catálogo (mismo) ===================== */
   const categoriasProductos = useMemo(
     () => Array.from(new Set((productos || []).map((p) => p.categoria || "Otros"))),
     [productos]
@@ -504,7 +797,7 @@ export default function Cotizaciones() {
     return equipos.find((e) => e.id === Number(id)) || null;
   }
 
-  // ===================== detalle =====================
+  /* ===================== detalle (mismo) ===================== */
   function agregarItem() {
     if (!itemSeleccionado) return;
 
@@ -570,11 +863,10 @@ export default function Cotizaciones() {
     return Number.isFinite(total) ? total : 0;
   }
 
-  // ===================== GUARDAR =====================
+  /* ===================== GUARDAR (misma lógica) ===================== */
   async function guardarCotizacion(e) {
     e.preventDefault();
 
-    // Ahora lo obligatorio es clienteSel.id
     if (!clienteSel?.id) {
       Swal.fire("Falta cliente", "Busca y selecciona un cliente por Cédula/RNC antes de guardar.", "warning");
       return;
@@ -585,7 +877,6 @@ export default function Cotizaciones() {
       return;
     }
 
-    // vendedor: fuerza extra=0
     const detalleSeguro = detalle.map((it) => {
       const precioBase = safeNumber(it.precioBase, 0);
       const cant = safeNumber(it.cantidad, 1);
@@ -617,10 +908,9 @@ export default function Cotizaciones() {
       montoPendiente = Number((total - montoAnticipo).toFixed(2));
     }
 
-    // Insert cotización (YA con cliente_id)
     const payloadCot = {
       cliente_id: clienteSel.id,
-      cliente: clienteSel.nombre || cliente || null, // snapshot opcional
+      cliente: clienteSel.nombre || cliente || null,
       total,
       descuento: safeNumber(descuento, 0),
       fecha: new Date().toISOString(),
@@ -640,7 +930,6 @@ export default function Cotizaciones() {
       return;
     }
 
-    // Insert detalle (productos + equipos)
     for (const it of detalleSeguro) {
       const cant = safeNumber(it.cantidad, 0);
       const unit = safeNumber(it.precioUnitario, 0);
@@ -667,7 +956,6 @@ export default function Cotizaciones() {
       }
     }
 
-    // Si está ligada a preventa, marcarla cotizada y guardar cliente_id ahí también (por si estaba null)
     if (preventaSeleccionada) {
       await supabase
         .from("preventas")
@@ -677,7 +965,6 @@ export default function Cotizaciones() {
 
     Swal.fire("Éxito", "Cotización guardada correctamente", "success");
 
-    // Reset
     setCliente("");
     setDoc("");
     setClienteSel(null);
@@ -707,6 +994,7 @@ export default function Cotizaciones() {
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
+      confirmButtonColor: "#e53935",
     });
     if (!result.isConfirmed) return;
 
@@ -721,353 +1009,614 @@ export default function Cotizaciones() {
   const anticipoActual = usaAnticipo ? Number((totalActual * 0.5).toFixed(2)) : 0;
   const pendienteActual = usaAnticipo ? Number((totalActual - anticipoActual).toFixed(2)) : 0;
 
+  const historyFiltered = useMemo(() => {
+    const q = String(historySearch || "").trim().toLowerCase();
+    if (!q) return cotizaciones || [];
+    return (cotizaciones || []).filter((c) => {
+      const cli = c.cliente_ref || null;
+      const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
+      const hay = [c.id, c.preventa_id, c.total, c.estado, c.fecha, clienteLabel]
+        .map((x) => String(x ?? "").toLowerCase())
+        .join(" | ");
+      return hay.includes(q);
+    });
+  }, [cotizaciones, historySearch]);
+
   return (
     <Wrapper>
-      <Form onSubmit={guardarCotizacion}>
-        <h2 style={{ color: "#00bcd4" }}>Nueva Cotización</h2>
+      <Container>
+        <Header>
+          <HeaderLeft>
+            <h2>
+              <FileText size={18} />
+              Cotizaciones
+            </h2>
+            <p>
+              Crea cotizaciones vinculadas a preventas, controla descuento y (opcional) plan 50/50.
+              En móvil, el historial se muestra en tarjetas para mejor lectura.
+            </p>
+          </HeaderLeft>
 
-        {preventaIdFromUrl && (
-          <div
-            style={{
-              marginBottom: "1rem",
-              padding: "0.8rem 1rem",
-              borderRadius: 10,
-              border: "1px solid rgba(0,0,0,0.08)",
-              background: "rgba(0,188,212,0.04)",
-              fontSize: "0.92rem",
-            }}
-          >
-            <strong>Preload activo</strong>: esta cotización se está precargando desde la preventa{" "}
-            <strong>#{preventaIdFromUrl}</strong>.{" "}
-            {loadingPreventa ? <span>Cargando items...</span> : <span>Items precargados.</span>}
-          </div>
-        )}
+          <HeaderRight>
+            <GhostBtn type="button" onClick={() => { fetchCotizaciones(); fetchPreventas(); }} disabled={loadingPreventa}>
+              <RefreshCw size={16} /> Recargar
+            </GhostBtn>
+            <Badge>
+              <ShieldCheck size={14} />
+              Rol: <strong>{isVendedor ? "Vendedor" : "Admin"}</strong>
+            </Badge>
+          </HeaderRight>
+        </Header>
 
-        <label>Cliente (buscar por documento)</label>
+        <FormCard>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 950, color: "inherit" }}>Nueva cotización</div>
+              <Muted>Primero selecciona cliente; luego agrega items (productos/equipos).</Muted>
+            </div>
 
-        <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <Select
-              value={tipoCliente}
-              onChange={(e) => {
-                setTipoCliente(e.target.value);
-                setClienteSel(null);
-                setDoc("");
-              }}
-              style={{ maxWidth: 260 }}
-            >
-              <option value="persona">Persona (Cédula)</option>
-              <option value="empresa">Empresa (RNC)</option>
-            </Select>
-
-            <Input
-              value={doc}
-              onChange={(e) => setDoc(e.target.value)}
-              placeholder={tipoCliente === "persona" ? "Cédula" : "RNC"}
-              style={{ minWidth: 220, flex: 1 }}
-            />
-
-            <Button type="button" onClick={handleBuscarCliente} disabled={clienteLoading || !doc.trim()}>
-              {clienteLoading ? "Buscando..." : "Buscar cliente"}
-            </Button>
+            {preventaIdFromUrl ? (
+              <Pill>
+                <Clock3 size={14} />
+                Preload: <strong>#{preventaIdFromUrl}</strong> {loadingPreventa ? "· cargando..." : "· listo"}
+              </Pill>
+            ) : null}
           </div>
 
-          <div>
-            <strong>Seleccionado:</strong> {clienteSel ? labelCliente(clienteSel) : "—"}
-            {clienteSel && (
-              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
-                Recurrente: <strong>{clienteSel.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
-                <strong>{clienteSel.puede_fiar ? "Sí" : "No"}</strong>
-              </div>
+          <Divider />
+
+          {/* ==================== Cliente ==================== */}
+          <Split>
+            <Field>
+              <Label>
+                <Tag size={14} />
+                Tipo de cliente
+              </Label>
+              <Select
+                value={tipoCliente}
+                onChange={(e) => {
+                  setTipoCliente(e.target.value);
+                  setClienteSel(null);
+                  setDoc("");
+                }}
+              >
+                <option value="persona">Persona (Cédula)</option>
+                <option value="empresa">Empresa (RNC)</option>
+              </Select>
+            </Field>
+
+            <Field>
+              <Label>
+                <Search size={14} />
+                Documento
+              </Label>
+              <Input
+                value={doc}
+                onChange={(e) => setDoc(e.target.value)}
+                placeholder={tipoCliente === "persona" ? "Cédula" : "RNC"}
+              />
+            </Field>
+
+            <Full>
+              <Row>
+                <PrimaryBtn type="button" onClick={handleBuscarCliente} disabled={clienteLoading || !doc.trim()}>
+                  <Search size={16} /> {clienteLoading ? "Buscando..." : "Buscar cliente"}
+                </PrimaryBtn>
+
+                <Muted>
+                  <strong>Seleccionado:</strong> {clienteSel ? labelCliente(clienteSel) : "—"}
+                </Muted>
+              </Row>
+
+              {clienteSel ? (
+                <InfoBanner>
+                  <MiniStack>
+                    <div style={{ fontWeight: 950 }}>
+                      <Boxes size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                      Perfil cliente
+                    </div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>
+                      Recurrente: <strong>{clienteSel.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
+                      <strong>{clienteSel.puede_fiar ? "Sí" : "No"}</strong>
+                    </div>
+                  </MiniStack>
+
+                  <Badge>
+                    <Package size={14} />
+                    Listo para cotizar
+                  </Badge>
+                </InfoBanner>
+              ) : null}
+            </Full>
+          </Split>
+
+          <Divider />
+
+          {/* ==================== Preventa ==================== */}
+          <Split>
+            <Field>
+              <Label>
+                <FileText size={14} />
+                Vincular preventa
+              </Label>
+              <Select
+                value={preventaSeleccionada}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPreventaSeleccionada(value);
+
+                  if (value) preloadDesdePreventa(Number(value));
+                  else setPreventaCargada(null);
+                }}
+              >
+                <option value="">Sin preventa</option>
+                {preventas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {`#${p.id} — ${p.numero_caso || "SIN CASO"} — ${p.cliente || "-"} — ${p.estado || "-"}`}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field>
+              <Label>
+                <ShieldCheck size={14} />
+                Estado preventa
+              </Label>
+              <Input
+                value={preventaCargada ? (preventaCargada.estado || "-") : "—"}
+                readOnly
+                placeholder="—"
+              />
+            </Field>
+          </Split>
+
+          <Divider />
+
+          {/* ==================== Items ==================== */}
+          <Split>
+            <Field>
+              <Label>
+                <Tag size={14} />
+                Tipo de item
+              </Label>
+              <Select
+                value={tipoItem}
+                onChange={(e) => {
+                  setTipoItem(e.target.value);
+                  setItemSeleccionado("");
+                  setCantidad(1);
+                  setExtraUnitario(0);
+                }}
+              >
+                <option value="producto">Producto</option>
+                <option value="equipo">Equipo</option>
+              </Select>
+            </Field>
+
+            <Field>
+              <Label>
+                <Plus size={14} />
+                Cantidad
+              </Label>
+              <Input
+                type="number"
+                value={cantidad}
+                min="1"
+                onChange={(e) => setCantidad(e.target.value === "" ? 1 : Number(e.target.value))}
+              />
+            </Field>
+
+            {/* filtros + selector */}
+            {tipoItem === "producto" ? (
+              <>
+                <Field>
+                  <Label>Categoría (productos)</Label>
+                  <Select
+                    value={categoriaProducto}
+                    onChange={(e) => {
+                      setCategoriaProducto(e.target.value);
+                      setMarcaProducto("");
+                      setItemSeleccionado("");
+                    }}
+                  >
+                    <option value="">Todas</option>
+                    {categoriasProductos.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field>
+                  <Label>Marca / Proveedor (productos)</Label>
+                  <Select
+                    value={marcaProducto}
+                    onChange={(e) => {
+                      setMarcaProducto(e.target.value);
+                      setItemSeleccionado("");
+                    }}
+                  >
+                    <option value="">Todas</option>
+                    {marcasProductosFiltradas.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Full>
+                  <Label>Producto</Label>
+                  <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
+                    <option value="">Seleccione un producto</option>
+                    {productosFiltrados.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                        {p.modelo ? ` - ${p.modelo}` : ""} — RD${safeNumber(p.precio, 0)}
+                      </option>
+                    ))}
+                  </Select>
+                </Full>
+              </>
+            ) : (
+              <>
+                <Field>
+                  <Label>Categoría (equipos)</Label>
+                  <Select
+                    value={categoriaEquipo}
+                    onChange={(e) => {
+                      setCategoriaEquipo(e.target.value);
+                      setMarcaEquipo("");
+                      setItemSeleccionado("");
+                    }}
+                  >
+                    <option value="">Todas</option>
+                    {categoriasEquipos.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field>
+                  <Label>Marca / Proveedor (equipos)</Label>
+                  <Select
+                    value={marcaEquipo}
+                    onChange={(e) => {
+                      setMarcaEquipo(e.target.value);
+                      setItemSeleccionado("");
+                    }}
+                  >
+                    <option value="">Todas</option>
+                    {marcasEquiposFiltradas.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Full>
+                  <Label>Equipo</Label>
+                  <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
+                    <option value="">Seleccione un equipo</option>
+                    {equiposFiltrados.map((eq) => (
+                      <option key={eq.id} value={eq.id}>
+                        {eq.nombre}
+                        {eq.modelo ? ` - ${eq.modelo}` : ""} — RD${safeNumber(eq.precio, 0)}
+                      </option>
+                    ))}
+                  </Select>
+                </Full>
+              </>
             )}
-          </div>
-        </div>
 
-        <label>Vincular preventa</label>
-        <Select
-          value={preventaSeleccionada}
-          onChange={(e) => {
-            const value = e.target.value;
-            setPreventaSeleccionada(value);
+            <Field>
+              <Label>Extra por unidad</Label>
+              <Input
+                type="number"
+                value={extraUnitario === 0 ? "" : extraUnitario}
+                onChange={(e) => setExtraUnitario(e.target.value === "" ? 0 : Number(e.target.value))}
+                placeholder={allowPriceEdit ? "Ej: 1000" : "Bloqueado para vendedor"}
+                disabled={!allowPriceEdit}
+              />
+            </Field>
 
-            if (value) preloadDesdePreventa(Number(value));
-            else setPreventaCargada(null);
-          }}
-        >
-          <option value="">Sin preventa</option>
-          {preventas.map((p) => (
-            <option key={p.id} value={p.id}>
-              {`#${p.id} — ${p.numero_caso || "SIN CASO"} — ${p.cliente || "-"} — ${p.estado || "-"}`}
-            </option>
-          ))}
-        </Select>
+            <Field>
+              <Label>Acciones</Label>
+              <PrimaryBtn type="button" onClick={agregarItem} disabled={loadingPreventa}>
+                <Plus size={16} /> Agregar item
+              </PrimaryBtn>
+            </Field>
+          </Split>
 
-        <Divider />
+          {detalle.length > 0 ? (
+            <>
+              <Divider />
 
-        <label>Tipo</label>
-        <Select
-          value={tipoItem}
-          onChange={(e) => {
-            setTipoItem(e.target.value);
-            setItemSeleccionado("");
-            setCantidad(1);
-            setExtraUnitario(0);
-          }}
-        >
-          <option value="producto">Producto</option>
-          <option value="equipo">Equipo</option>
-        </Select>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 950 }}>Detalle</div>
+                <Badge>
+                  <Package size={14} />
+                  Items: <strong>{detalle.length}</strong>
+                </Badge>
+              </div>
 
-        {tipoItem === "producto" ? (
-          <>
-            <label>Categoría (productos)</label>
-            <Select
-              value={categoriaProducto}
-              onChange={(e) => {
-                setCategoriaProducto(e.target.value);
-                setMarcaProducto("");
-                setItemSeleccionado("");
-              }}
-            >
-              <option value="">Todas</option>
-              {categoriasProductos.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </Select>
+              <DesktopOnly>
+                <TableWrap style={{ marginTop: 10 }}>
+                  <Table>
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Item</th>
+                        <th>Cant.</th>
+                        <th>Precio base</th>
+                        <th>Extra / unidad</th>
+                        <th>Precio unitario</th>
+                        <th>Subtotal</th>
+                        <th>Quitar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalle.map((d, i) => {
+                        const subtotal = safeNumber(d.precioUnitario, 0) * safeNumber(d.cantidad, 0);
+                        return (
+                          <tr key={i}>
+                            <td>{d.tipo}</td>
+                            <td>
+                              <strong>{d.nombre}</strong>
+                              {d.modelo ? <div style={{ fontSize: 13, opacity: 0.8 }}>{d.modelo}</div> : null}
+                            </td>
+                            <td>{safeNumber(d.cantidad, 0)}</td>
+                            <td>RD${safeNumber(d.precioBase, 0).toFixed(2)}</td>
+                            <td>RD${safeNumber(d.extra, 0).toFixed(2)}</td>
+                            <td>RD${safeNumber(d.precioUnitario, 0).toFixed(2)}</td>
+                            <td>
+                              <strong>RD${subtotal.toFixed(2)}</strong>
+                            </td>
+                            <td>
+                              <IconBtn type="button" onClick={() => eliminarItem(i)} title="Quitar">
+                                <Trash2 size={16} />
+                              </IconBtn>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+              </DesktopOnly>
 
-            <label>Marca / Proveedor (productos)</label>
-            <Select
-              value={marcaProducto}
-              onChange={(e) => {
-                setMarcaProducto(e.target.value);
-                setItemSeleccionado("");
-              }}
-            >
-              <option value="">Todas</option>
-              {marcasProductosFiltradas.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </Select>
-
-            <label>Producto</label>
-            <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
-              <option value="">Seleccione un producto</option>
-              {productosFiltrados.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                  {p.modelo ? ` - ${p.modelo}` : ""} — RD${safeNumber(p.precio, 0)}
-                </option>
-              ))}
-            </Select>
-          </>
-        ) : (
-          <>
-            <label>Categoría (equipos)</label>
-            <Select
-              value={categoriaEquipo}
-              onChange={(e) => {
-                setCategoriaEquipo(e.target.value);
-                setMarcaEquipo("");
-                setItemSeleccionado("");
-              }}
-            >
-              <option value="">Todas</option>
-              {categoriasEquipos.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </Select>
-
-            <label>Marca / Proveedor (equipos)</label>
-            <Select
-              value={marcaEquipo}
-              onChange={(e) => {
-                setMarcaEquipo(e.target.value);
-                setItemSeleccionado("");
-              }}
-            >
-              <option value="">Todas</option>
-              {marcasEquiposFiltradas.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </Select>
-
-            <label>Equipo</label>
-            <Select value={itemSeleccionado} onChange={(e) => setItemSeleccionado(e.target.value)}>
-              <option value="">Seleccione un equipo</option>
-              {equiposFiltrados.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.nombre}
-                  {eq.modelo ? ` - ${eq.modelo}` : ""} — RD${safeNumber(eq.precio, 0)}
-                </option>
-              ))}
-            </Select>
-          </>
-        )}
-
-        <label>Cantidad</label>
-        <Input
-          type="number"
-          value={cantidad}
-          min="1"
-          onChange={(e) => setCantidad(e.target.value === "" ? 1 : Number(e.target.value))}
-        />
-
-        <label>Monto extra por unidad</label>
-        <Input
-          type="number"
-          value={extraUnitario === 0 ? "" : extraUnitario}
-          onChange={(e) => setExtraUnitario(e.target.value === "" ? 0 : Number(e.target.value))}
-          placeholder={allowPriceEdit ? "Ej: 1000" : "Bloqueado para vendedor (precios fijos)"}
-          disabled={!allowPriceEdit}
-        />
-
-        <Button type="button" onClick={agregarItem} disabled={loadingPreventa}>
-          Agregar item
-        </Button>
-
-        {detalle.length > 0 && (
-          <>
-            <Divider />
-            <Table>
-              <thead>
-                <tr>
-                  <th>Tipo</th>
-                  <th>Item</th>
-                  <th>Cant.</th>
-                  <th>Precio base</th>
-                  <th>Extra / unidad</th>
-                  <th>Precio unitario</th>
-                  <th>Subtotal</th>
-                  <th>Quitar</th>
-                </tr>
-              </thead>
-              <tbody>
+              <MobileList>
                 {detalle.map((d, i) => {
                   const subtotal = safeNumber(d.precioUnitario, 0) * safeNumber(d.cantidad, 0);
                   return (
-                    <tr key={i}>
-                      <td>{d.tipo}</td>
+                    <MobileCard key={i}>
+                      <MobileHeader>
+                        <MobileTitle>
+                          <strong>{d.nombre}</strong>
+                          <span>
+                            {d.tipo} {d.modelo ? `· ${d.modelo}` : ""}
+                          </span>
+                        </MobileTitle>
+
+                        <IconBtn type="button" onClick={() => eliminarItem(i)} title="Quitar">
+                          <Trash2 size={16} />
+                        </IconBtn>
+                      </MobileHeader>
+
+                      <MobileMeta>
+                        <Pill>Cant: {safeNumber(d.cantidad, 0)}</Pill>
+                        <Pill>Unit: RD${safeNumber(d.precioUnitario, 0).toFixed(2)}</Pill>
+                        <Pill>
+                          <strong>Sub: RD${subtotal.toFixed(2)}</strong>
+                        </Pill>
+                      </MobileMeta>
+                    </MobileCard>
+                  );
+                })}
+              </MobileList>
+            </>
+          ) : null}
+
+          <Divider />
+
+          {/* ==================== Totales ==================== */}
+          <Split>
+            <Field>
+              <Label>Descuento (%)</Label>
+              <Input
+                type="number"
+                value={descuento}
+                onChange={(e) => setDescuento(e.target.value === "" ? 0 : Number(e.target.value))}
+              />
+            </Field>
+
+            <Field>
+              <Label>Total estimado</Label>
+              <Input value={`RD$ ${totalActual.toFixed(2)}`} readOnly />
+            </Field>
+
+            <Full>
+              <InfoBanner>
+                <MiniStack>
+                  <div style={{ fontWeight: 950 }}>Pago 50% / 50%</div>
+                  <div style={{ fontSize: 13, opacity: 0.85 }}>
+                    Si se activa, el cliente verá anticipo y pendiente con 50/50.
+                  </div>
+                </MiniStack>
+
+                <label style={{ display: "inline-flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+                  <input type="checkbox" checked={usaAnticipo} onChange={(e) => setUsaAnticipo(e.target.checked)} />
+                  <span style={{ fontWeight: 850 }}>Permitir plan 50/50</span>
+                </label>
+              </InfoBanner>
+
+              {usaAnticipo ? (
+                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <Badge>Anticipo: <strong>RD${anticipoActual.toFixed(2)}</strong></Badge>
+                  <Badge>Pendiente: <strong>RD${pendienteActual.toFixed(2)}</strong></Badge>
+                </div>
+              ) : null}
+            </Full>
+
+            <Full>
+              <PrimaryBtn type="button" onClick={guardarCotizacion} disabled={loadingPreventa}>
+                <FileText size={16} /> Guardar cotización
+              </PrimaryBtn>
+            </Full>
+          </Split>
+        </FormCard>
+
+{/* ==================== Historial ==================== */}
+<div
+  style={{
+    marginTop: "1rem",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+  }}
+>
+  <div style={{ display: "grid", gap: 4 }}>
+    <div style={{ fontWeight: 950 }}>Historial</div>
+    <Muted>Busca por cliente, ID, estado o #preventa.</Muted>
+  </div>
+
+  <div style={{ minWidth: 280, flex: 1, maxWidth: 520 }}>
+    <Field style={{ padding: "0.7rem 0.85rem", borderRadius: 999 }}>
+      <Label style={{ marginBottom: 6 }}>
+        <Search size={14} />
+        Buscar en historial
+      </Label>
+      <Input
+        value={historySearch}
+        onChange={(e) => setHistorySearch(e.target.value)}
+        placeholder="Ej: #12, pendiente, RNC, cliente..."
+      />
+    </Field>
+  </div>
+</div>
+
+
+        {/* Desktop table */}
+        <DesktopOnly>
+          <TableWrap style={{ marginTop: 12 }}>
+            <Table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Cliente</th>
+                  <th>Preventa</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th>Anticipo</th>
+                  <th>Fecha</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyFiltered.map((c) => {
+                  const cli = c.cliente_ref || null;
+                  const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
+
+                  return (
+                    <tr key={c.id}>
+                      <td>#{c.id}</td>
+                      <td>{clienteLabel}</td>
+                      <td>{c.preventa_id ? `#${c.preventa_id}` : "-"}</td>
                       <td>
-                        {d.nombre}
-                        {d.modelo ? ` - ${d.modelo}` : ""}
+                        <strong>
+                          RD$
+                          {safeNumber(c.total, 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}
+                        </strong>
                       </td>
-                      <td>{safeNumber(d.cantidad, 0)}</td>
-                      <td>RD${safeNumber(d.precioBase, 0).toFixed(2)}</td>
-                      <td>RD${safeNumber(d.extra, 0).toFixed(2)}</td>
-                      <td>RD${safeNumber(d.precioUnitario, 0).toFixed(2)}</td>
-                      <td>RD${subtotal.toFixed(2)}</td>
                       <td>
-                        <Trash2 size={20} className="delete-btn" onClick={() => eliminarItem(i)} />
+                        <EstadoBadge estado={c.estado || "pendiente"}>● {formatearEstado(c.estado)}</EstadoBadge>
+                      </td>
+                      <td>
+                        {c.usa_anticipo ? (
+                          <div style={{ display: "grid", gap: 2 }}>
+                            <span>Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong></span>
+                            <span>Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong></span>
+                          </div>
+                        ) : (
+                          "No"
+                        )}
+                      </td>
+                      <td>{c.fecha ? new Date(c.fecha).toLocaleDateString() : "-"}</td>
+                      <td>
+                        <RowActions>
+                          <IconBtn type="button" onClick={() => navigate(`/admin/cotizaciones/${c.id}`)} title="Ver">
+                            <Eye size={16} />
+                          </IconBtn>
+                          <DangerBtn type="button" onClick={() => eliminarCotizacion(c.id)} title="Eliminar">
+                            <Trash2 size={16} /> Eliminar
+                          </DangerBtn>
+                        </RowActions>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </Table>
-          </>
-        )}
+          </TableWrap>
+        </DesktopOnly>
 
-        <Divider />
-
-        <label>Descuento (%)</label>
-        <Input
-          type="number"
-          value={descuento}
-          onChange={(e) => setDescuento(e.target.value === "" ? 0 : Number(e.target.value))}
-        />
-
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "0.8rem 1rem",
-            borderRadius: "8px",
-            border: "1px solid rgba(0,0,0,0.08)",
-            background: "rgba(0,188,212,0.03)",
-          }}
-        >
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" checked={usaAnticipo} onChange={(e) => setUsaAnticipo(e.target.checked)} />
-            <span>Permitir pago 50% inicial / 50% restante</span>
-          </label>
-
-          {usaAnticipo && (
-            <div style={{ marginTop: 8, fontSize: "0.9rem" }}>
-              <div>
-                Total estimado: <strong>RD${totalActual.toFixed(2)}</strong>
-              </div>
-              <div>
-                Anticipo (50%): <strong>RD${anticipoActual.toFixed(2)}</strong>
-              </div>
-              <div>
-                Pendiente (50%): <strong>RD${pendienteActual.toFixed(2)}</strong>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <Button type="submit" disabled={loadingPreventa}>
-          Guardar cotización
-        </Button>
-      </Form>
-
-      <h3>Historial de cotizaciones</h3>
-      <Table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Preventa</th>
-            <th>Total</th>
-            <th>Estado</th>
-            <th>Anticipo</th>
-            <th>Fecha</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cotizaciones.map((c) => {
+        {/* Mobile cards */}
+        <MobileList>
+          {historyFiltered.map((c) => {
             const cli = c.cliente_ref || null;
-            const clienteLabel = cli ? labelCliente(cli) : (c.cliente || "-");
-
+            const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
             return (
-              <tr key={c.id}>
-                <td>{c.id}</td>
-                <td>{clienteLabel}</td>
-                <td>{c.preventa_id ? `#${c.preventa_id}` : "-"}</td>
-                <td>
-                  RD$
-                  {safeNumber(c.total, 0).toLocaleString("es-DO", { minimumFractionDigits: 2 })}
-                </td>
-                <td>
+              <MobileCard key={c.id}>
+                <MobileHeader>
+                  <MobileTitle>
+                    <strong>#{c.id}</strong>
+                    <span>{clienteLabel}</span>
+                  </MobileTitle>
+
+                  <RowActions>
+                    <IconBtn type="button" onClick={() => navigate(`/admin/cotizaciones/${c.id}`)} title="Ver">
+                      <Eye size={16} />
+                    </IconBtn>
+                    <IconBtn type="button" onClick={() => eliminarCotizacion(c.id)} title="Eliminar">
+                      <Trash2 size={16} />
+                    </IconBtn>
+                  </RowActions>
+                </MobileHeader>
+
+                <MobileMeta>
+                  <Pill>Total: <strong>RD${safeNumber(c.total, 0).toFixed(2)}</strong></Pill>
                   <EstadoBadge estado={c.estado || "pendiente"}>● {formatearEstado(c.estado)}</EstadoBadge>
-                </td>
-                <td>
-                  {c.usa_anticipo
-                    ? `Inicial: RD$${safeNumber(c.monto_anticipo, 0)} / Restante: RD$${safeNumber(c.monto_pendiente, 0)}`
-                    : "No"}
-                </td>
-                <td>{c.fecha ? new Date(c.fecha).toLocaleDateString() : "-"}</td>
-                <td style={{ display: "flex", gap: "0.5rem" }}>
-                  <Eye
-                    size={18}
-                    style={{ cursor: "pointer", color: "#00bcd4" }}
-                    onClick={() => navigate(`/admin/cotizaciones/${c.id}`)}
-                  />
-                  <Trash2 size={18} className="delete-btn" onClick={() => eliminarCotizacion(c.id)} />
-                </td>
-              </tr>
+                  {c.preventa_id ? <Pill>Preventa: <strong>#{c.preventa_id}</strong></Pill> : null}
+                </MobileMeta>
+
+                {c.usa_anticipo ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <Badge>Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong></Badge>
+                    <Badge>Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong></Badge>
+                  </div>
+                ) : (
+                  <Muted>Anticipo: No</Muted>
+                )}
+              </MobileCard>
             );
           })}
-        </tbody>
-      </Table>
+        </MobileList>
+
+        {/* Empty state */}
+        {!historyFiltered.length ? (
+          <div style={{ marginTop: 12 }}>
+            <Card style={{ padding: "1rem" }}>
+              <Muted>No hay cotizaciones para mostrar con ese filtro.</Muted>
+            </Card>
+          </div>
+        ) : null}
+      </Container>
     </Wrapper>
   );
 }
