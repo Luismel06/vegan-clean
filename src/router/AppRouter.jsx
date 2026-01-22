@@ -27,6 +27,7 @@ import PublicacionesAdmin from "../pages/admin/Publicaciones";
 import Cotizaciones from "../pages/admin/Cotizaciones";
 import VistaCotizacion from "../pages/admin/VistaCotizacion";
 import AdminClientes from "../pages/admin/AdminClientes.jsx";
+import Finanzas from "../pages/admin/Finanzas.jsx";
 
 // --- Páginas Vendedor ---
 import VendedorCatalogo from "../pages/vendedor/VendedorCatalogo";
@@ -91,15 +92,16 @@ const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Dashboard /> },
+      { path: "finanzas", element: <Finanzas /> },
       { path: "usuarios", element: <Usuarios /> },
-      { path: "tickets", element: <Tickets /> },
+      { path: "clientes", element: <AdminClientes /> },
       { path: "productos", element: <Productos /> },
       { path: "equipos", element: <Equipos /> },
+      { path: "tickets", element: <Tickets /> },
       { path: "preventa/:id", element: <PreventaDetalle /> },
       { path: "publicaciones", element: <PublicacionesAdmin /> },
       { path: "cotizaciones", element: <Cotizaciones /> },
       { path: "cotizaciones/:id", element: <VistaCotizacion /> },
-      { path: "clientes", element: <AdminClientes /> },
     ],
   },
 

@@ -15,6 +15,8 @@ import {
   Filter,
   CalendarDays,
   X,
+  Ban,
+  FileText,
 } from "lucide-react";
 
 /* =========================
@@ -84,7 +86,7 @@ const HeaderLeft = styled.div`
     opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.88)};
     font-size: 0.92rem;
     line-height: 1.45;
-    max-width: 80ch;
+    max-width: 90ch;
   }
 `;
 
@@ -311,7 +313,7 @@ const TableScroll = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px; /* ensures columns keep readable, scroll on small screens */
+  min-width: 980px;
 
   th,
   td {
@@ -571,6 +573,17 @@ function tabLabel(key) {
   }
 }
 
+function cotizacionLabel(estado) {
+  const e = String(estado || "").toLowerCase();
+  if (!e) return "—";
+  if (e === "pendiente") return "Pendiente";
+  if (e === "aceptada") return "Aceptada";
+  if (e === "rechazada") return "Rechazada";
+  if (e === "preparacion") return "Preparación";
+  if (e === "cancelada") return "Cancelada";
+  return estado;
+}
+
 /* ==================== COMPONENTE ==================== */
 export default function Tickets() {
   const navigate = useNavigate();
@@ -580,7 +593,13 @@ export default function Tickets() {
   const [loading, setLoading] = useState(true);
 
   const [preventas, setPreventas] = useState([]);
-  const [almacenCotizaciones, setAlmacenCotizaciones] = useState([]);
+
+  // Cotizaciones por vista:
+  const [almacenCotizaciones, setAlmacenCotizaciones] = useState([]); // estado = preparacion
+  const [canceladasCotizaciones, setCanceladasCotizaciones] = useState([]); // estado IN (rechazada,cancelada)
+
+  // Mapa preventa_id -> última cotización (estado/id/fecha)
+  const [ultimaCotPorPreventa, setUltimaCotPorPreventa] = useState(new Map());
 
   const [query, setQuery] = useState("");
   const [dateWindow, setDateWindow] = useState("7"); // today | 7 | 30 | 90 | all
@@ -614,8 +633,26 @@ export default function Tickets() {
       if (prevErr) throw prevErr;
       setPreventas(prevData || []);
 
-      // 2) COTIZACIONES EN ALMACÉN (estado = "preparacion")
-      const { data: cotData, error: cotErr } = await supabase
+      // 2) ÚLTIMA COTIZACIÓN POR PREVENTA (para mostrar estado de cotización junto al ticket)
+      const { data: cotMapData, error: cotMapErr } = await supabase
+        .from("cotizaciones")
+        .select(`id, estado, fecha, preventa_id`)
+        .not("preventa_id", "is", null)
+        .order("fecha", { ascending: false });
+
+      if (cotMapErr) throw cotMapErr;
+
+      const map = new Map();
+      for (const row of cotMapData || []) {
+        const pid = row.preventa_id;
+        if (!pid) continue;
+        // como viene ordenado desc, el primero es la última
+        if (!map.has(pid)) map.set(pid, row);
+      }
+      setUltimaCotPorPreventa(map);
+
+      // 3) COTIZACIONES EN ALMACÉN / PREPARACIÓN (estado = "preparacion")
+      const { data: cotPrepData, error: cotPrepErr } = await supabase
         .from("cotizaciones")
         .select(`
           id, estado, fecha, total, descuento, numero_caso, preventa_id, solicitud_id, cliente,
@@ -629,8 +666,26 @@ export default function Tickets() {
         .eq("estado", "preparacion")
         .order("fecha", { ascending: false });
 
-      if (cotErr) throw cotErr;
-      setAlmacenCotizaciones(cotData || []);
+      if (cotPrepErr) throw cotPrepErr;
+      setAlmacenCotizaciones(cotPrepData || []);
+
+      // 4) COTIZACIONES CANCELADAS (rechazada o cancelada) => aparecen en pestaña "Canceladas"
+      const { data: cotCanData, error: cotCanErr } = await supabase
+        .from("cotizaciones")
+        .select(`
+          id, estado, fecha, total, descuento, numero_caso, preventa_id, solicitud_id, cliente,
+          cliente_ref:clientes!cotizaciones_cliente_id_fkey (
+            id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, es_recurrente, puede_fiar
+          ),
+          preventa_ref:preventas!cotizaciones_preventa_id_fkey (
+            id, numero_caso
+          )
+        `)
+        .in("estado", ["rechazada", "cancelada"])
+        .order("fecha", { ascending: false });
+
+      if (cotCanErr) throw cotCanErr;
+      setCanceladasCotizaciones(cotCanData || []);
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudieron cargar los tickets.", "error");
@@ -653,8 +708,12 @@ export default function Tickets() {
       if (c[p.estado] !== undefined) c[p.estado]++;
     }
     c.almacen = (almacenCotizaciones || []).length;
+
+    // Canceladas = preventas canceladas + cotizaciones rechazadas/canceladas
+    c.cancelada = (preventas || []).filter((p) => p.estado === "cancelada").length + (canceladasCotizaciones || []).length;
+
     return c;
-  }, [preventas, almacenCotizaciones]);
+  }, [preventas, almacenCotizaciones, canceladasCotizaciones]);
 
   const listFiltered = useMemo(() => {
     const q = safeText(query).toLowerCase();
@@ -662,14 +721,37 @@ export default function Tickets() {
     if (tab === "almacen") {
       return (almacenCotizaciones || [])
         .filter((c) => withinDateWindow(c, dateWindow, "fecha"))
-        .filter((c) => matchesQueryCotizacion(c, q));
+        .filter((c) => matchesQueryCotizacion(c, q))
+        .map((x) => ({ ...x, __type: "cotizacion_preparacion" }));
     }
 
+    if (tab === "cancelada") {
+      const prevCanceladas = (preventas || [])
+        .filter((p) => p.estado === "cancelada")
+        .filter((p) => withinDateWindow(p, dateWindow, "creado_en"))
+        .filter((p) => matchesQueryPreventa(p, q))
+        .map((x) => ({ ...x, __type: "preventa" }));
+
+      const cotCanceladas = (canceladasCotizaciones || [])
+        .filter((c) => withinDateWindow(c, dateWindow, "fecha"))
+        .filter((c) => matchesQueryCotizacion(c, q))
+        .map((x) => ({ ...x, __type: "cotizacion_cancelada" }));
+
+      // Unificamos para que la pestaña Canceladas muestre ambos
+      return [...prevCanceladas, ...cotCanceladas].sort((a, b) => {
+        const da = new Date(a.__type.startsWith("preventa") ? a.creado_en : a.fecha).getTime();
+        const db = new Date(b.__type.startsWith("preventa") ? b.creado_en : b.fecha).getTime();
+        return db - da;
+      });
+    }
+
+    // Otros tabs: solo preventas por estado
     const base = (preventas || []).filter((p) => p.estado === tab);
     return base
       .filter((p) => withinDateWindow(p, dateWindow, "creado_en"))
-      .filter((p) => matchesQueryPreventa(p, q));
-  }, [tab, preventas, almacenCotizaciones, query, dateWindow]);
+      .filter((p) => matchesQueryPreventa(p, q))
+      .map((x) => ({ ...x, __type: "preventa" }));
+  }, [tab, preventas, almacenCotizaciones, canceladasCotizaciones, query, dateWindow]);
 
   function verDetallesPreventa(preventaId) {
     navigate(`/admin/preventa/${preventaId}`);
@@ -730,7 +812,9 @@ export default function Tickets() {
               Tickets / Preventas
             </h2>
             <p>
-              Búsqueda por #Caso, cliente, cédula, RNC, email o teléfono. Incluye la vista de “Almacén / Preparación”.
+              Los estados de <strong>tickets</strong> (preventas) y <strong>cotizaciones</strong> son distintos.
+              En cada ticket verás la <strong>última cotización</strong> (si existe). La pestaña <strong>Canceladas</strong> incluye
+              tanto tickets cancelados como cotizaciones rechazadas/canceladas.
             </p>
           </HeaderLeft>
 
@@ -751,7 +835,7 @@ export default function Tickets() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar tickets..."
+                placeholder="Buscar tickets o cotizaciones..."
                 aria-label="Buscar tickets"
               />
               {query.trim() ? (
@@ -802,6 +886,7 @@ export default function Tickets() {
               Ventas (Aceptadas) <Count>{counts.cerrada}</Count>
             </TabButton>
             <TabButton $active={tab === "cancelada"} onClick={() => setTab("cancelada")}>
+              <Ban size={16} />
               Canceladas <Count>{counts.cancelada}</Count>
             </TabButton>
             <TabButton $active={tab === "almacen"} onClick={() => setTab("almacen")}>
@@ -845,11 +930,17 @@ export default function Tickets() {
                       (c?.preventa_id ? `#${c.preventa_id}` : "-");
 
                     return (
-                      <tr key={c.id}>
+                      <tr key={`prep-${c.id}`}>
                         <td>
                           <CellTitle>#{c.id}</CellTitle>
                           <CellMeta>
-                            {c?.solicitud_id ? <>Solicitud: <strong>#{c.solicitud_id}</strong></> : "—"}
+                            {c?.solicitud_id ? (
+                              <>
+                                Solicitud: <strong>#{c.solicitud_id}</strong>
+                              </>
+                            ) : (
+                              "—"
+                            )}
                           </CellMeta>
                         </td>
 
@@ -869,7 +960,7 @@ export default function Tickets() {
                         </td>
 
                         <td>
-                          <Badge>{c.estado || "-"}</Badge>
+                          <Badge>{cotizacionLabel(c.estado)}</Badge>
                         </td>
 
                         <td>
@@ -898,6 +989,143 @@ export default function Tickets() {
                 </tbody>
               </Table>
             </TableScroll>
+          ) : tab === "cancelada" ? (
+            <TableScroll>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>ID</th>
+                    <th>#Caso</th>
+                    <th>Cliente</th>
+                    <th>Estado</th>
+                    <th>Contacto</th>
+                    <th>Fecha</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {listFiltered.map((row) => {
+                    if (row.__type === "preventa") {
+                      const p = row;
+                      const clienteLabel = labelClienteFromJoin(p);
+                      const tipo = p?.cliente_ref?.tipo_cliente || p.tipo_cliente || "-";
+                      const ultimaCot = ultimaCotPorPreventa.get(p.id);
+
+                      return (
+                        <tr key={`can-prev-${p.id}`}>
+                          <td>
+                            <Badge>
+                              <Ticket size={14} /> Ticket
+                            </Badge>
+                          </td>
+                          <td>
+                            <CellTitle>#{p.id}</CellTitle>
+                            <CellMeta>Tipo: <strong>{tipo}</strong></CellMeta>
+                          </td>
+                          <td>
+                            <Badge>{p.numero_caso || "-"}</Badge>
+                          </td>
+                          <td>
+                            <CellTitle>{clienteLabel}</CellTitle>
+                            {ultimaCot ? (
+                              <CellMeta>
+                                Cotización (última):{" "}
+                                <strong>
+                                  #{ultimaCot.id} · {cotizacionLabel(ultimaCot.estado)}
+                                </strong>
+                              </CellMeta>
+                            ) : (
+                              <CellMeta>Cotización: <strong>—</strong></CellMeta>
+                            )}
+                          </td>
+                          <td>
+                            <Badge>Cancelada</Badge>
+                          </td>
+                          <td>
+                            <div>{p.email || p?.cliente_ref?.email || "-"}</div>
+                            <div>{p.telefono || p?.cliente_ref?.telefono || "-"}</div>
+                          </td>
+                          <td>{formatDateTime(p.creado_en)}</td>
+                          <td>
+                            <ActionsCell>
+                              <Btn onClick={() => verDetallesPreventa(p.id)}>
+                                <Eye size={16} /> Ver ticket
+                              </Btn>
+                              <SecondaryBtn onClick={() => crearCotizacionDesdePreventa(p.id)}>
+                                <FilePlus2 size={16} /> Crear cotización
+                              </SecondaryBtn>
+                            </ActionsCell>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // cotizacion_cancelada
+                    const c = row;
+                    const clienteLabel = labelClienteFromJoin(c);
+                    const caso =
+                      c?.preventa_ref?.numero_caso ||
+                      c?.numero_caso ||
+                      (c?.preventa_id ? `#${c.preventa_id}` : "-");
+
+                    return (
+                      <tr key={`can-cot-${c.id}`}>
+                        <td>
+                          <Badge>
+                            <FileText size={14} /> Cotización
+                          </Badge>
+                        </td>
+                        <td>
+                          <CellTitle>#{c.id}</CellTitle>
+                          <CellMeta>
+                            {c?.solicitud_id ? (
+                              <>
+                                Solicitud: <strong>#{c.solicitud_id}</strong>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </CellMeta>
+                        </td>
+                        <td>
+                          <Badge>{caso}</Badge>
+                        </td>
+                        <td>
+                          <CellTitle>{clienteLabel}</CellTitle>
+                          {c?.cliente_ref ? (
+                            <CellMeta>
+                              {c?.cliente_ref?.email || "-"} · {c?.cliente_ref?.telefono || "-"}
+                            </CellMeta>
+                          ) : null}
+                        </td>
+                        <td>
+                          <Badge>{cotizacionLabel(c.estado)}</Badge>
+                        </td>
+                        <td>
+                          <div>{c?.cliente_ref?.email || "-"}</div>
+                          <div>{c?.cliente_ref?.telefono || "-"}</div>
+                        </td>
+                        <td>{formatDateTime(c.fecha)}</td>
+                        <td>
+                          <ActionsCell>
+                            <Btn onClick={() => navigate(`/admin/cotizaciones/${c.id}`)}>
+                              <Eye size={16} /> Ver cotización
+                            </Btn>
+                            {c.preventa_id ? (
+                              <SecondaryBtn onClick={() => verDetallesPreventa(c.preventa_id)}>
+                                <Eye size={16} /> Ver ticket
+                              </SecondaryBtn>
+                            ) : null}
+                          </ActionsCell>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </TableScroll>
           ) : (
             <TableScroll>
               <Table>
@@ -907,6 +1135,7 @@ export default function Tickets() {
                     <th>#Caso</th>
                     <th>Cliente</th>
                     <th>Tipo</th>
+                    <th>Cotización (última)</th>
                     <th>Contacto</th>
                     <th>Fecha</th>
                     <th>Acciones</th>
@@ -914,16 +1143,18 @@ export default function Tickets() {
                 </thead>
 
                 <tbody>
-                  {listFiltered.map((p) => {
+                  {listFiltered.map((row) => {
+                    const p = row;
                     const clienteLabel = labelClienteFromJoin(p);
                     const tipo = p?.cliente_ref?.tipo_cliente || p.tipo_cliente || "-";
+                    const ultimaCot = ultimaCotPorPreventa.get(p.id);
 
                     return (
                       <tr key={p.id}>
                         <td>
                           <CellTitle>#{p.id}</CellTitle>
                           <CellMeta>
-                            Estado: <strong>{p.estado}</strong>
+                            Estado ticket: <strong>{p.estado}</strong>
                           </CellMeta>
                         </td>
 
@@ -943,6 +1174,16 @@ export default function Tickets() {
 
                         <td>
                           <Badge>{tipo}</Badge>
+                        </td>
+
+                        <td>
+                          {ultimaCot ? (
+                            <Badge>
+                              #{ultimaCot.id} · {cotizacionLabel(ultimaCot.estado)}
+                            </Badge>
+                          ) : (
+                            <Badge>—</Badge>
+                          )}
                         </td>
 
                         <td>

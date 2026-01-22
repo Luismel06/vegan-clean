@@ -1,16 +1,24 @@
 // src/pages/admin/Dashboard.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
+import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import {
   Users,
-  ClipboardList,
   ShoppingBag,
-  Wrench,
   DollarSign,
   TrendingUp,
   Award,
+  PackageCheck,
+  ClipboardList,
+  RefreshCw,
+  LogOut,
+  Activity,
+  BadgeDollarSign,
+  BarChart3,
+  LineChart as LineIcon,
+  PieChart as PieIcon,
 } from "lucide-react";
 import {
   BarChart,
@@ -22,420 +30,805 @@ import {
   CartesianGrid,
   LineChart,
   Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 
-// === Estilos ===
-const Container = styled.section`
+/* =========================
+   Helpers
+========================= */
+function safeNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function monthKey(d) {
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function fmtMoney(n) {
+  const v = safeNumber(n, 0);
+  return `RD$ ${v.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/* =========================
+   Chart Colors (All graphs)
+   - explicit colors so everything is consistent
+========================= */
+
+// Accent palette (kept consistent across charts)
+const CHART = {
+  lineVentas12m: "#16a34a", // green
+  barEstados: "#2563eb", // blue
+  barEstadosGrid: "rgba(37, 99, 235, 0.18)",
+  barEstadosText: "#0f172a",
+  barTopMonto: "#f59e0b", // amber
+  barTopQty: "#06b6d4", // cyan
+};
+
+// Pie palette (Top 5 vendidos)
+const PIE_COLORS = ["#2563eb", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4", "#f97316", "#14b8a6"];
+
+// Optional: consistent color by name (if you want stable colors even when order changes)
+// If not found, falls back to PIE_COLORS by index.
+const PIE_COLOR_BY_NAME = {
+  // "Ambientador Spray": "#2563eb",
+  // "Antitabaco": "#ef4444",
+  // "Carrito de Servicios": "#22c55e",
+};
+
+/* =========================
+   Styles (same visual language)
+========================= */
+const shimmer = keyframes`
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+`;
+
+const Wrapper = styled.section`
   width: 100%;
   min-height: 100vh;
-  background-color: ${({ theme }) => theme.background};
+  background: ${({ theme }) => theme.background};
   color: ${({ theme }) => theme.text};
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem 1rem 4rem;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  padding: 1.5rem 1rem 4rem;
+  transition: background-color 0.25s ease, color 0.25s ease;
 `;
 
-const Header = styled.div`
-  text-align: left;
+const Container = styled.div`
   width: 100%;
-  max-width: 1100px;
-  margin-bottom: 2.5rem;
-  margin-top: 1rem;
+  max-width: 1180px;
+  margin: 0 auto;
 `;
 
-const Title = styled.h1`
+const Header = styled.header`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0 1.1rem;
+`;
+
+const HeaderLeft = styled.div`
+  min-width: 280px;
+
+  h1 {
+    margin: 0;
+    font-weight: 1000;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.heading || theme.text};
+    font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  p {
+    margin: 0.35rem 0 0;
+    opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.88)};
+    font-size: 0.92rem;
+    line-height: 1.45;
+    max-width: 90ch;
+  }
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const BtnBase = styled.button`
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.68rem 0.9rem;
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: transform 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+  &:focus-visible {
+    outline: 3px solid ${({ theme }) => theme.accentSoft};
+    outline-offset: 3px;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const PrimaryBtn = styled(BtnBase)`
+  background: ${({ theme }) => theme.accent};
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+`;
+
+const GhostBtn = styled(BtnBase)`
+  background: ${({ theme }) => theme.cardBackground};
+  border-color: ${({ theme }) => theme.border};
   color: ${({ theme }) => theme.accent};
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
 `;
 
-const Subtitle = styled.p`
-  font-size: 1rem;
-  color: ${({ theme }) => theme.textSecondary || "#888"};
+const Card = styled.div`
+  background: ${({ theme }) => theme.cardBackground};
+  border: 1px solid ${({ theme }) => theme.border};
+  border-radius: 22px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, ${({ theme }) => (theme.mode === "dark" ? 0.18 : 0.08)});
 `;
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 1.5rem;
-  width: 100%;
-  max-width: 1100px;
-`;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0.85rem;
+  margin-top: 0.85rem;
 
-const Card = styled.div`
-  background-color: ${({ theme }) => theme.cardBackground};
-  border-radius: 15px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  padding: 1.8rem 1.5rem;
-  text-align: center;
-  transition: all 0.3s ease;
-  &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+  @media (max-width: 980px) {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  @media (max-width: 680px) {
+    grid-template-columns: repeat(2, 1fr);
   }
 `;
 
-const IconWrapper = styled.div`
+const StatCard = styled(Card)`
+  grid-column: span 3;
+  padding: 0.95rem 1rem;
+  display: grid;
+  gap: 0.45rem;
+
+  @media (max-width: 980px) {
+    grid-column: span 3;
+  }
+  @media (max-width: 680px) {
+    grid-column: span 2;
+  }
+`;
+
+const StatTop = styled.div`
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 0.65rem;
   align-items: center;
-  background-color: ${({ theme }) => theme.accent};
-  width: 55px;
-  height: 55px;
-  border-radius: 50%;
-  margin: 0 auto 1rem auto;
 `;
 
-const CardTitle = styled.h3`
-  margin-bottom: 0.3rem;
-  font-size: 1rem;
+const StatTitle = styled.div`
+  font-weight: 950;
+  opacity: 0.9;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 `;
 
-const CardValue = styled.p`
-  font-size: 1.7rem;
-  font-weight: 700;
-  color: ${({ theme }) => theme.accent};
+const StatValue = styled.div`
+  font-weight: 1000;
+  font-size: 1.25rem;
+  color: ${({ theme }) => theme.heading};
 `;
 
-const ChartContainer = styled.div`
-  width: 100%;
-  max-width: 1100px;
-  background-color: ${({ theme }) => theme.cardBackground};
-  border-radius: 16px;
-  padding: 2rem;
-  margin-top: 3rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+const Muted = styled.div`
+  font-size: 0.88rem;
+  opacity: ${({ theme }) => (theme.mode === "dark" ? 0.78 : 0.84)};
+  line-height: 1.4;
 `;
 
-const ChartTitle = styled.h2`
-  color: ${({ theme }) => theme.accent};
-  margin-bottom: 1.5rem;
-`;
+const TwoCol = styled.div`
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
 
-const ActivitySection = styled.div`
-  width: 100%;
-  max-width: 1100px;
-  margin-top: 3rem;
-  background-color: ${({ theme }) => theme.cardBackground};
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  text-align: left;
-`;
-
-const ActivityTitle = styled.h3`
-  color: ${({ theme }) => theme.accent};
-  margin-bottom: 1.5rem;
-`;
-
-const ActivityList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
-`;
-
-const ActivityItem = styled.li`
-  border-bottom: 1px solid ${({ theme }) => theme.border};
-  padding: 0.8rem 0;
-  font-size: 0.95rem;
-
-  span {
-    color: ${({ theme }) => theme.accent};
-    font-weight: 600;
+  @media (max-width: 980px) {
+    grid-template-columns: 1fr;
   }
 `;
 
+const Panel = styled(Card)`
+  padding: 1rem;
+`;
+
+const PanelTitle = styled.div`
+  font-weight: 1000;
+  color: ${({ theme }) => theme.heading};
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+`;
+
+const SkeletonRow = styled.div`
+  height: 54px;
+  border-radius: 14px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  background-image: linear-gradient(
+    90deg,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)")} 0%,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)")} 50%,
+    ${({ theme }) => (theme.mode === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)")} 100%
+  );
+  background-size: 200% 100%;
+  animation: ${shimmer} 1.35s ease infinite;
+`;
+
+const List = styled.div`
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+`;
+
+const LogItem = styled.div`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  border-radius: 16px;
+  padding: 0.8rem 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+
+  strong {
+    font-weight: 1000;
+  }
+  small {
+    opacity: ${({ theme }) => (theme.mode === "dark" ? 0.75 : 0.82)};
+  }
+`;
+
+const Pill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 950;
+  font-size: 0.82rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+`;
+
+/* =========================
+   Custom Tooltip (consistent look)
+========================= */
+function ChartTooltip({ active, payload, label, formatterPrefix = "" }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.92)",
+        border: "1px solid rgba(0,0,0,0.10)",
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "0 18px 45px rgba(0,0,0,0.10)",
+        maxWidth: 260,
+      }}
+    >
+      <div style={{ fontWeight: 950, marginBottom: 6 }}>{label}</div>
+      {payload.map((p, idx) => (
+        <div key={idx} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <span style={{ opacity: 0.9 }}>{p.name}</span>
+          <strong>
+            {formatterPrefix}
+            {typeof p.value === "number" ? p.value.toLocaleString("es-DO") : String(p.value)}
+          </strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* =========================
+   Component
+========================= */
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // === Stats de ventas ===
   const [stats, setStats] = useState({
     usuarios: 0,
-    servicios: 0,
     productos: 0,
-    solicitudes: 0,
-    totalVendido: 0,
+    totalVendido: 0, // aceptada/preparacion/despachado
     ventasMes: 0,
-    productoTop: "-",
-  });
-
-  // === Stats de cotizaciones ===
-  const [statsCot, setStatsCot] = useState({
-    totalCotizado: 0,
+    despachadasMes: 0,
+    topItemVendido: "-",
     cotizacionesMes: 0,
-    pendientes: 0,
-    aceptadas: 0,
-    rechazadas: 0,
   });
 
-  const [chartData, setChartData] = useState([]);
   const [ventasMensuales, setVentasMensuales] = useState([]);
-  const [actividades, setActividades] = useState([]);
+  const [estadoCotizaciones, setEstadoCotizaciones] = useState([]);
+  const [topItems, setTopItems] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
 
   useEffect(() => {
     const checkSession = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error || !data?.user) {
         navigate("/admin/login", { replace: true });
-      } else {
-        setUser(data.user);
-        cargarDatos();
+        return;
       }
+      setUser(data.user);
+      await cargarDatos();
     };
     checkSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  const cargarDatos = async () => {
+  async function logout() {
     try {
-      const [
-        { count: usuarios },
-        { count: servicios },
-        { count: productos },
-        solicitudesData,
-        cotData,
-        detalleVentasData,
-      ] = await Promise.all([
+      await supabase.auth.signOut();
+      navigate("/admin/login", { replace: true });
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo cerrar sesión.", "error");
+    }
+  }
+
+  async function cargarDatos() {
+    try {
+      setLoading(true);
+
+      const now = new Date();
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      const [usuariosRes, productosRes, cotRes, topVendidosRes, movRes] = await Promise.all([
         supabase.from("usuarios").select("*", { count: "exact", head: true }),
-        supabase.from("servicios").select("*", { count: "exact", head: true }),
         supabase.from("productos").select("*", { count: "exact", head: true }),
-        supabase.from("solicitudes").select("cliente, estado, fecha"),
-        supabase.from("cotizaciones").select("total, estado, fecha"),
-        supabase.from("productos").select("nombre, cantidad, precio"),
+        supabase.from("cotizaciones").select("id, total, estado, fecha").order("id", { ascending: false }),
+        supabase
+          .from("v_top_items_vendidos")
+          .select("tipo, item_id, nombre, unidades, subtotal")
+          .order("subtotal", { ascending: false })
+          .limit(10),
+        supabase
+          .from("movimientos")
+          .select("id, created_at, actor_id, accion, cotizacion_id, monto, estado_nuevo")
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
 
-      // === TOTAL VENDIDO (no incluye cotizaciones) ===
-      // === TOTAL VENDIDO (solo cotizaciones aceptadas) ===
-      const totalVendido =
-        cotData.data
-        ?.filter((c) => c.estado === "aceptada")
-        .reduce((acc, c) => acc + Number(c.total || 0), 0) || 0;
+      if (cotRes.error) throw cotRes.error;
+      if (topVendidosRes.error) throw topVendidosRes.error;
+      if (movRes.error) throw movRes.error;
 
+      const cotizaciones = cotRes.data || [];
 
-      const mesActual = new Date().getMonth();
+      const isVenta = (e) => ["aceptada", "preparacion", "despachado"].includes(String(e || "").trim().toLowerCase());
+      const isDesp = (e) => String(e || "").trim().toLowerCase() === "despachado";
 
-      // === VENTAS DEL MES (solo aceptadas) ===
-      const ventasAceptadasMes =
-        cotData.data?.filter(
-    (c) =>
-      c.estado === "aceptada" &&
-      new Date(c.fecha).getMonth() === mesActual
-          ) || [];
+      const totalVendido = cotizaciones.filter((c) => isVenta(c.estado)).reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
 
-      const totalMes = ventasAceptadasMes.reduce(
-  (acc, c) => acc + Number(c.total || 0),
-  0
-);
+      const ventasMes = cotizaciones
+        .filter((c) => isVenta(c.estado) && new Date(c.fecha) >= startMonth && new Date(c.fecha) < endMonth)
+        .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
 
-      const productoTop =
-        detalleVentasData.data?.reduce(
-          (max, p) => (p.cantidad > (max?.cantidad || 0) ? p : max),
-          {}
-        )?.nombre || "Sin datos";
+      const despachadasMes = cotizaciones
+        .filter((c) => isDesp(c.estado) && new Date(c.fecha) >= startMonth && new Date(c.fecha) < endMonth)
+        .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
 
-      const estadoCounts = solicitudesData.data?.reduce((acc, s) => {
-        acc[s.estado] = (acc[s.estado] || 0) + 1;
+      const cotizacionesMes = cotizaciones.filter((c) => new Date(c.fecha) >= startMonth && new Date(c.fecha) < endMonth).length;
+
+      // Estado cotizaciones (bar)
+      const counts = cotizaciones.reduce((acc, c) => {
+        const k = String(c.estado || "sin_estado").trim().toLowerCase();
+        acc[k] = (acc[k] || 0) + 1;
         return acc;
       }, {});
+      const estadoData = Object.entries(counts).map(([estado, cantidad]) => ({ estado, cantidad }));
 
-      const formattedData = Object.entries(estadoCounts || {}).map(
-        ([estado, cantidad]) => ({ estado, cantidad })
-      );
+      // Ventas mensuales (12m)
+      const ventasPorMes = {};
+      for (const c of cotizaciones) {
+        if (!isVenta(c.estado)) continue;
+        const k = monthKey(c.fecha);
+        ventasPorMes[k] = (ventasPorMes[k] || 0) + safeNumber(c.total, 0);
+      }
 
-      // === Cotizaciones ===
-      const totalCotizado =
-        cotData.data?.reduce((acc, c) => acc + Number(c.total || 0), 0) || 0;
+      const months = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const k = monthKey(d);
+        months.push({
+          mes: d.toLocaleString("es-DO", { month: "short" }),
+          key: k,
+          total: safeNumber(ventasPorMes[k], 0),
+        });
+      }
 
-      const cotizacionesMes =
-        cotData.data?.filter(
-          (c) => new Date(c.fecha).getMonth() === mesActual
-        ).length || 0;
-
-      const pendientes =
-        cotData.data?.filter((c) => c.estado === "pendiente").length || 0;
-
-      const aceptadas =
-        cotData.data?.filter((c) => c.estado === "aceptada").length || 0;
-
-      const rechazadas =
-        cotData.data?.filter((c) => c.estado === "rechazada").length || 0;
-
-      setStatsCot({
-        totalCotizado,
-        cotizacionesMes,
-        pendientes,
-        aceptadas,
-        rechazadas,
-      });
-
-      // === Ventas mensuales (para la gráfica) ===
-      const ventasPorMes = Array(12).fill(0);
-      cotData.data?.forEach((v) => {
-        const mes = new Date(v.fecha).getMonth();
-        ventasPorMes[mes] += v.total;
-      });
-
-      const ventasMensualesData = [
-        "Ene", "Feb", "Mar", "Abr",
-        "May", "Jun", "Jul", "Ago",
-        "Sep", "Oct", "Nov", "Dic",
-      ].map((m, i) => ({
-        mes: m,
-        total: ventasPorMes[i],
-      }));
-
-      const actividadesRecientes = solicitudesData.data
-        ?.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-        .slice(0, 5)
-        .map((s) => ({
-          cliente: s.cliente,
-          estado: s.estado,
-          fecha: new Date(s.fecha).toLocaleString(),
-        }));
+      const topItemsData = topVendidosRes.data || [];
+      const topItemVendido = topItemsData[0]?.nombre || "Sin datos";
 
       setStats({
-        usuarios,
-        servicios,
-        productos,
-        solicitudes: solicitudesData.data?.length || 0,
+        usuarios: usuariosRes.count || 0,
+        productos: productosRes.count || 0,
         totalVendido,
-        ventasMes: totalMes,
-        productoTop,
+        ventasMes,
+        despachadasMes,
+        topItemVendido,
+        cotizacionesMes,
       });
 
-      setChartData(formattedData);
-      setVentasMensuales(ventasMensualesData);
-      setActividades(actividadesRecientes);
-    } catch (error) {
-      console.error("Error cargando datos:", error);
+      setVentasMensuales(months);
+      setEstadoCotizaciones(estadoData);
+      setTopItems(topItemsData);
+      setMovimientos(movRes.data || []);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudieron cargar los datos del dashboard.", "error");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
+
+  const pieData = useMemo(() => {
+    // Top 5 para pastel
+    const list = (topItems || []).slice(0, 5);
+    const total = list.reduce((acc, x) => acc + safeNumber(x.subtotal, 0), 0) || 1;
+    return list.map((x) => ({
+      name: x.nombre,
+      value: safeNumber(x.subtotal, 0),
+      pct: (safeNumber(x.subtotal, 0) / total) * 100,
+    }));
+  }, [topItems]);
+
+  const topBarData = useMemo(() => {
+    // Top 10 para barras (monto + unidades)
+    return (topItems || []).slice(0, 10).map((x) => ({
+      name: x.nombre,
+      monto: safeNumber(x.subtotal, 0),
+      unidades: safeNumber(x.unidades, 0),
+    }));
+  }, [topItems]);
+
+  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Usuario";
 
   return (
-    <Container>
-      <Header>
-        <Title>Resumen Financiero</Title>
-        <Subtitle>
-           Hola {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email},
-          analiza tus ventas, cotizaciones y solicitudes.
-        </Subtitle>
-      </Header>
+    <Wrapper>
+      <Container>
+        <Header>
+          <HeaderLeft>
+            <h1>
+              <BadgeDollarSign size={18} />
+              Dashboard de Ventas
+            </h1>
+            <p>
+              Hola <strong>{displayName}</strong>. Resumen basado en <strong>cotizaciones</strong> y <strong>logs</strong>. Venta:
+              <strong> aceptada + preparación + despachado</strong>.
+            </p>
+          </HeaderLeft>
 
-      {/* === Tarjetas existentes === */}
-      <Grid>
-        <Card>
-          <IconWrapper><DollarSign size={26} /></IconWrapper>
-          <CardTitle>Total Vendido</CardTitle>
-          <CardValue>RD$ {stats.totalVendido.toLocaleString()}</CardValue>
-        </Card>
+          <HeaderRight>
+            <GhostBtn onClick={cargarDatos} disabled={loading}>
+              <RefreshCw size={16} /> {loading ? "Cargando..." : "Recargar"}
+            </GhostBtn>
+            <GhostBtn onClick={logout}>
+              <LogOut size={16} /> Salir
+            </GhostBtn>
+          </HeaderRight>
+        </Header>
 
-        <Card>
-          <IconWrapper><TrendingUp size={26} /></IconWrapper>
-          <CardTitle>Ventas del Mes</CardTitle>
-          <CardValue>RD$ {stats.ventasMes.toLocaleString()}</CardValue>
-        </Card>
+        {/* =========================
+            Stat cards
+        ========================= */}
+        <Grid>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <DollarSign size={16} /> Total vendido
+              </StatTitle>
+              <DollarSign size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : fmtMoney(stats.totalVendido)}</StatValue>
+            <Muted>Aceptada + preparación + despachado.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><Award size={26} /></IconWrapper>
-          <CardTitle>Más Vendido</CardTitle>
-          <CardValue>{stats.productoTop}</CardValue>
-        </Card>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <TrendingUp size={16} /> Ventas del mes
+              </StatTitle>
+              <TrendingUp size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : fmtMoney(stats.ventasMes)}</StatValue>
+            <Muted>Basado en la fecha de creación.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><ClipboardList size={26} /></IconWrapper>
-          <CardTitle>Solicitudes</CardTitle>
-          <CardValue>{stats.solicitudes}</CardValue>
-        </Card>
-      </Grid>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <PackageCheck size={16} /> Despachado (mes)
+              </StatTitle>
+              <PackageCheck size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : fmtMoney(stats.despachadasMes)}</StatValue>
+            <Muted>Venta real confirmada por despacho.</Muted>
+          </StatCard>
 
-      {/* === NUEVAS TARJETAS DE COTIZACIONES === */}
-      <Grid style={{ marginTop: "2rem" }}>
-        <Card>
-          <IconWrapper><DollarSign size={26} /></IconWrapper>
-          <CardTitle>Total Cotizado</CardTitle>
-          <CardValue>RD$ {statsCot.totalCotizado.toLocaleString()}</CardValue>
-        </Card>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <Award size={16} /> Top vendido
+              </StatTitle>
+              <Award size={16} />
+            </StatTop>
+            <StatValue style={{ fontSize: "1.05rem" }}>{loading ? "—" : stats.topItemVendido}</StatValue>
+            <Muted>Según v_top_items_vendidos.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><TrendingUp size={26} /></IconWrapper>
-          <CardTitle>Cotizaciones del Mes</CardTitle>
-          <CardValue>{statsCot.cotizacionesMes}</CardValue>
-        </Card>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <ShoppingBag size={16} /> Productos
+              </StatTitle>
+              <ShoppingBag size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : stats.productos}</StatValue>
+            <Muted>Conteo de productos activos.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><ClipboardList size={26} /></IconWrapper>
-          <CardTitle>Pendientes</CardTitle>
-          <CardValue>{statsCot.pendientes}</CardValue>
-        </Card>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <Users size={16} /> Usuarios
+              </StatTitle>
+              <Users size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : stats.usuarios}</StatValue>
+            <Muted>Usuarios registrados en el sistema.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><Award size={26} /></IconWrapper>
-          <CardTitle>Aceptadas</CardTitle>
-          <CardValue>{statsCot.aceptadas}</CardValue>
-        </Card>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <ClipboardList size={16} /> Cotizaciones (mes)
+              </StatTitle>
+              <ClipboardList size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : stats.cotizacionesMes}</StatValue>
+            <Muted>Cantidad creada en el mes actual.</Muted>
+          </StatCard>
 
-        <Card>
-          <IconWrapper><Wrench size={26} /></IconWrapper>
-          <CardTitle>Rechazadas</CardTitle>
-          <CardValue>{statsCot.rechazadas}</CardValue>
-        </Card>
-      </Grid>
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <Activity size={16} /> Logs recientes
+              </StatTitle>
+              <Activity size={16} />
+            </StatTop>
+            <StatValue>{loading ? "—" : movimientos.length}</StatValue>
+            <Muted>Últimos cambios registrados.</Muted>
+          </StatCard>
+        </Grid>
 
-      {/* === Ventas Mensuales === */}
-      <ChartContainer>
-        <ChartTitle>Ventas Mensuales</ChartTitle>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={ventasMensuales}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
-            <XAxis dataKey="mes" stroke="#999" />
-            <YAxis stroke="#999" />
-            <Tooltip />
-            <Line
-              type="monotone"
-              dataKey="total"
-              stroke="#00bcd4"
-              strokeWidth={3}
-              dot={{ r: 5, fill: "#00bcd4" }}
-              activeDot={{ r: 8 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </ChartContainer>
+        {/* =========================
+            Charts
+        ========================= */}
+        <TwoCol>
+          {/* 12m Line */}
+          <Panel>
+            <PanelTitle>
+              <LineIcon size={18} /> Ventas (últimos 12 meses)
+            </PanelTitle>
+            <Muted>Serie mensual (cotizaciones en estados de venta).</Muted>
 
-      {/* === Estado de Solicitudes === */}
-      <ChartContainer>
-        <ChartTitle>Estado de las Solicitudes</ChartTitle>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ccc" />
-            <XAxis dataKey="estado" stroke="#999" />
-            <YAxis allowDecimals={false} stroke="#999" />
-            <Tooltip />
-            <Bar dataKey="cantidad" fill="#00bcd4" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartContainer>
+            <div style={{ width: "100%", height: 300, marginTop: 10 }}>
+              {loading ? (
+                <SkeletonRow />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={ventasMensuales}>
+                    <CartesianGrid stroke={CHART.barEstadosGrid} strokeDasharray="3 3" />
+                    <XAxis dataKey="mes" />
+                    <YAxis />
+                    <Tooltip content={<ChartTooltip formatterPrefix="RD$ " />} />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      name="Total"
+                      stroke={CHART.lineVentas12m}
+                      strokeWidth={3}
+                      dot={{ r: 3, fill: CHART.lineVentas12m }}
+                      activeDot={{ r: 6, fill: CHART.lineVentas12m }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Panel>
 
-      {/* === Actividad Reciente === */}
-      <ActivitySection>
-        <ActivityTitle>Actividad Reciente</ActivityTitle>
-        <ActivityList>
-          {actividades?.length > 0 ? (
-            actividades.map((a, i) => (
-              <ActivityItem key={i}>
-                <span>{a.cliente}</span> — {a.estado}
-                <br />
-                <small>{a.fecha}</small>
-              </ActivityItem>
-            ))
-          ) : (
-            <p>No hay registros recientes.</p>
-          )}
-        </ActivityList>
-      </ActivitySection>
-    </Container>
+          {/* Estado Bar */}
+          <Panel>
+            <PanelTitle>
+              <BarChart3 size={18} /> Estado de cotizaciones (conteo)
+            </PanelTitle>
+            <Muted>Distribución por estado (mes actual según fecha).</Muted>
+
+            <div style={{ width: "100%", height: 300, marginTop: 10 }}>
+              {loading ? (
+                <SkeletonRow />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={estadoCotizaciones}>
+                    <CartesianGrid stroke={CHART.barEstadosGrid} strokeDasharray="3 3" />
+                    <XAxis dataKey="estado" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="cantidad" name="Cantidad" fill={CHART.barEstados} radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Panel>
+        </TwoCol>
+
+        {/* Top bars + Pie */}
+        <TwoCol>
+          {/* Top 10 bar */}
+          <Panel>
+            <PanelTitle>
+              <BarChart3 size={18} /> Top 10 vendidos (monto / unidades)
+            </PanelTitle>
+            <Muted>Comparación por monto y unidades (según v_top_items_vendidos).</Muted>
+
+            <div style={{ width: "100%", height: 330, marginTop: 10 }}>
+              {loading ? (
+                <SkeletonRow />
+              ) : topBarData.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topBarData}>
+                    <CartesianGrid stroke={CHART.barEstadosGrid} strokeDasharray="3 3" />
+                    <XAxis dataKey="name" hide />
+                    <YAxis />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const name = payload?.[0]?.payload?.name || label;
+                        return (
+                          <div
+                            style={{
+                              background: "rgba(255,255,255,0.92)",
+                              border: "1px solid rgba(0,0,0,0.10)",
+                              borderRadius: 12,
+                              padding: "10px 12px",
+                              boxShadow: "0 18px 45px rgba(0,0,0,0.10)",
+                              maxWidth: 280,
+                            }}
+                          >
+                            <div style={{ fontWeight: 950, marginBottom: 6 }}>{name}</div>
+                            {payload.map((p, idx) => (
+                              <div key={idx} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                <span style={{ opacity: 0.9 }}>{p.name}</span>
+                                <strong>{p.dataKey === "monto" ? fmtMoney(p.value) : p.value}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend />
+                    <Bar dataKey="monto" name="Monto (RD$)" fill={CHART.barTopMonto} radius={[10, 10, 0, 0]} />
+                    <Bar dataKey="unidades" name="Unidades" fill={CHART.barTopQty} radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Muted style={{ marginTop: 8 }}>No hay datos para top.</Muted>
+              )}
+            </div>
+          </Panel>
+
+          {/* Pie Top 5 */}
+          <Panel>
+            <PanelTitle>
+              <PieIcon size={18} /> Top 5 vendidos (subtotal)
+            </PanelTitle>
+            <Muted>Basado en v_top_items_vendidos. Muestra participación aproximada.</Muted>
+
+            <div style={{ width: "100%", height: 330, marginTop: 10 }}>
+              {loading ? (
+                <SkeletonRow />
+              ) : pieData.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip
+                      formatter={(v) => fmtMoney(v)}
+                      labelFormatter={(label) => label}
+                    />
+                    <Legend />
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      outerRadius={105}
+                      labelLine={false}
+                      label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                    >
+                      {pieData.map((entry, idx) => {
+                        const byName = PIE_COLOR_BY_NAME[entry.name];
+                        const fallback = PIE_COLORS[idx % PIE_COLORS.length];
+                        return <Cell key={`cell-${idx}`} fill={byName || fallback} />;
+                      })}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <Muted style={{ marginTop: 8 }}>No hay datos para el top 5.</Muted>
+              )}
+            </div>
+          </Panel>
+        </TwoCol>
+
+        {/* =========================
+            Logs
+        ========================= */}
+        <Panel style={{ marginTop: "0.85rem" }}>
+          <PanelTitle>
+            <Activity size={18} /> Actividad (Logs)
+          </PanelTitle>
+          <Muted>Últimos movimientos registrados.</Muted>
+
+          <div style={{ marginTop: 12 }}>
+            {loading ? (
+              <SkeletonRow />
+            ) : movimientos?.length ? (
+              <List>
+                {movimientos.map((m) => (
+                  <LogItem key={m.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <div>
+                        <strong>{m.accion}</strong>{" "}
+                        <Pill>{(m.estado_nuevo || "-").toLowerCase()}</Pill>
+                      </div>
+                      <div style={{ fontWeight: 950 }}>{fmtMoney(m.monto)}</div>
+                    </div>
+
+                    <div style={{ opacity: 0.88 }}>
+                      Cotización: <strong>#{m.cotizacion_id ?? "-"}</strong>
+                    </div>
+
+                    <small>{new Date(m.created_at).toLocaleString("es-DO")}</small>
+                  </LogItem>
+                ))}
+              </List>
+            ) : (
+              <Muted style={{ marginTop: 6 }}>No hay registros recientes.</Muted>
+            )}
+          </div>
+        </Panel>
+      </Container>
+    </Wrapper>
   );
 }

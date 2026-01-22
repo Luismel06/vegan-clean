@@ -12,6 +12,9 @@ import {
   Sun,
   Moon,
   DollarSign,
+  TrendingUp,
+  UsersIcon,
+  UserSearchIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabase.config.jsx";
@@ -367,13 +370,14 @@ export function AdminLayout() {
   const NAV_ITEMS = useMemo(
     () => [
       { path: "/admin", title: "Dashboard", icon: LayoutDashboard },
+      { path: "/admin/finanzas", title: "Finanzas", icon: TrendingUp },
       { path: "/admin/Usuarios", title: "Usuarios", icon: Users },
+      { path: "/admin/clientes", title: "Clientes", icon: UserSearchIcon },
       { path: "/admin/equipos", title: "Equipos", icon: Wrench },
       { path: "/admin/productos", title: "Productos", icon: ShoppingBag },
-      { path: "/admin/tickets", title: "Tickets", icon: ClipboardList },
       { path: "/admin/publicaciones", title: "Posts", icon: FileText },
+      { path: "/admin/tickets", title: "Tickets", icon: ClipboardList },
       { path: "/admin/cotizaciones", title: "Cotiz.", icon: DollarSign },
-      { path: "/admin/clientes", title: "Clientes", icon: Users },
     ],
     []
   );

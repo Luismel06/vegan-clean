@@ -3,7 +3,23 @@ import { useEffect, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
-import { Eye, Trash2, Search, RefreshCw, Plus, FileText, Tag, Boxes, Package, ShieldCheck, Clock3 } from "lucide-react";
+import {
+  Eye,
+  Trash2,
+  Search,
+  RefreshCw,
+  Plus,
+  FileText,
+  Tag,
+  Boxes,
+  Package,
+  ShieldCheck,
+  Clock3,
+  Ban,
+  CheckCircle2,
+  XCircle,
+  Hourglass,
+} from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 /* =========================
@@ -61,7 +77,7 @@ const HeaderLeft = styled.div`
     font-size: 0.92rem;
     line-height: 1.45;
     opacity: ${({ theme }) => (theme.mode === "dark" ? 0.82 : 0.88)};
-    max-width: 80ch;
+    max-width: 90ch;
   }
 `;
 
@@ -316,7 +332,7 @@ const TableWrap = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 1040px;
 
   th,
   td {
@@ -425,14 +441,18 @@ const EstadoBadge = styled.span`
   background-color: ${({ estado }) =>
     estado === "aceptada"
       ? "rgba(46, 204, 113, 0.16)"
-      : estado === "rechazada"
+      : estado === "rechazada" || estado === "cancelada"
       ? "rgba(231, 76, 60, 0.14)"
+      : estado === "preparacion"
+      ? "rgba(52, 152, 219, 0.14)"
       : "rgba(241, 196, 15, 0.18)"};
   color: ${({ estado }) =>
     estado === "aceptada"
       ? "#27ae60"
-      : estado === "rechazada"
+      : estado === "rechazada" || estado === "cancelada"
       ? "#c0392b"
+      : estado === "preparacion"
+      ? "#2980b9"
       : "#b7950b"};
 `;
 
@@ -476,6 +496,24 @@ async function buscarClientePorDocumento({ tipo, documento }) {
     .maybeSingle();
   if (error) throw error;
   return data || null;
+}
+
+function estadoIcon(estado) {
+  const e = String(estado || "").toLowerCase();
+  if (e === "aceptada") return <CheckCircle2 size={14} />;
+  if (e === "rechazada" || e === "cancelada") return <XCircle size={14} />;
+  if (e === "preparacion") return <Hourglass size={14} />;
+  return <Clock3 size={14} />;
+}
+
+function estadosCotizacionOpciones() {
+  return [
+    { value: "pendiente", label: "Pendiente" },
+    { value: "preparacion", label: "Preparación" },
+    { value: "aceptada", label: "Aceptada" },
+    { value: "rechazada", label: "Rechazada" },
+    { value: "cancelada", label: "Cancelada" },
+  ];
 }
 
 /* =========================
@@ -573,6 +611,9 @@ export default function Cotizaciones() {
         *,
         cliente_ref:clientes (
           id, tipo_cliente, nombre, cedula, empresa_rnc
+        ),
+        preventa_ref:preventas!cotizaciones_preventa_id_fkey (
+          id, numero_caso, estado
         )
       `
       )
@@ -585,7 +626,7 @@ export default function Cotizaciones() {
   async function fetchPreventas() {
     const { data, error } = await supabase
       .from("preventas")
-      .select("id, numero_caso, cliente, estado, creado_en, tipo_cliente, email, telefono, cedula, empresa_rnc, cliente_id")
+      .select("id, numero_caso, cliente, estado, creado_en, tipo_cliente, email, telefono, cedula, empresa_nombre, empresa_rnc, cliente_id")
       .order("id", { ascending: false });
 
     if (error) console.error(error);
@@ -616,7 +657,7 @@ export default function Cotizaciones() {
     }
   }
 
-  /* ===================== PRELOAD DESDE PREVENTA (misma lógica tuya) ===================== */
+  /* ===================== PRELOAD DESDE PREVENTA ===================== */
   async function preloadDesdePreventa(preventaId) {
     if (!preventaId || Number.isNaN(preventaId)) return;
 
@@ -741,7 +782,7 @@ export default function Cotizaciones() {
     }
   }
 
-  /* ===================== filtros catálogo (mismo) ===================== */
+  /* ===================== filtros catálogo ===================== */
   const categoriasProductos = useMemo(
     () => Array.from(new Set((productos || []).map((p) => p.categoria || "Otros"))),
     [productos]
@@ -797,7 +838,7 @@ export default function Cotizaciones() {
     return equipos.find((e) => e.id === Number(id)) || null;
   }
 
-  /* ===================== detalle (mismo) ===================== */
+  /* ===================== detalle ===================== */
   function agregarItem() {
     if (!itemSeleccionado) return;
 
@@ -863,7 +904,7 @@ export default function Cotizaciones() {
     return Number.isFinite(total) ? total : 0;
   }
 
-  /* ===================== GUARDAR (misma lógica) ===================== */
+  /* ===================== GUARDAR ===================== */
   async function guardarCotizacion(e) {
     e.preventDefault();
 
@@ -1005,6 +1046,67 @@ export default function Cotizaciones() {
     Swal.fire("Eliminada", "La cotización ha sido eliminada.", "success");
   }
 
+  // ======== CAMBIO DE ESTADO COTIZACIÓN + SINCRONIZACIÓN PREVENTA ========
+  async function cambiarEstadoCotizacion(cot, nuevoEstado) {
+    const actual = String(cot?.estado || "pendiente");
+    if (nuevoEstado === actual) return;
+
+    const res = await Swal.fire({
+      icon: "question",
+      title: "Cambiar estado de cotización",
+      html: `Cotización <strong>#${cot.id}</strong><br/>De <strong>${formatearEstado(actual)}</strong> a <strong>${formatearEstado(
+        nuevoEstado
+      )}</strong>`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, cambiar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#16a34a",
+    });
+    if (!res.isConfirmed) return;
+
+    const { error: errUpdate } = await supabase.from("cotizaciones").update({ estado: nuevoEstado }).eq("id", cot.id);
+    if (errUpdate) {
+      console.error(errUpdate);
+      Swal.fire("Error", "No se pudo actualizar el estado de la cotización.", "error");
+      return;
+    }
+
+    // Si está vinculada a una preventa, sincronizamos el estado del ticket:
+    const pid = cot.preventa_id || cot?.preventa_ref?.id || null;
+    if (pid) {
+      // Reglas:
+      // aceptada => preventa cerrada
+      // rechazada/cancelada => preventa cancelada
+      // pendiente/preparacion => preventa cotizada (si no está cerrada/cancelada)
+      let nuevoEstadoPreventa = null;
+
+      if (nuevoEstado === "aceptada") nuevoEstadoPreventa = "cerrada";
+      else if (nuevoEstado === "rechazada" || nuevoEstado === "cancelada") nuevoEstadoPreventa = "cancelada";
+      else if (nuevoEstado === "pendiente" || nuevoEstado === "preparacion") nuevoEstadoPreventa = "cotizada";
+
+      if (nuevoEstadoPreventa) {
+        // Actualizamos preventa solo si existe
+        const { data: prev, error: prevErr } = await supabase.from("preventas").select("id, estado").eq("id", pid).maybeSingle();
+        if (!prevErr && prev?.id) {
+          // Si ya está cerrada/cancelada y el nuevo estado sugerido es "cotizada", no la bajamos.
+          if (
+            (prev.estado === "cerrada" || prev.estado === "cancelada") &&
+            nuevoEstadoPreventa === "cotizada"
+          ) {
+            // no hacemos downgrade
+          } else {
+            const { error: updPrevErr } = await supabase.from("preventas").update({ estado: nuevoEstadoPreventa }).eq("id", pid);
+            if (updPrevErr) console.warn("No se pudo sincronizar preventa:", updPrevErr);
+          }
+        }
+      }
+    }
+
+    Swal.fire("Listo", "Estado actualizado.", "success");
+    fetchCotizaciones();
+    fetchPreventas();
+  }
+
   const totalActual = calcularTotalConDescuento();
   const anticipoActual = usaAnticipo ? Number((totalActual * 0.5).toFixed(2)) : 0;
   const pendienteActual = usaAnticipo ? Number((totalActual - anticipoActual).toFixed(2)) : 0;
@@ -1015,7 +1117,8 @@ export default function Cotizaciones() {
     return (cotizaciones || []).filter((c) => {
       const cli = c.cliente_ref || null;
       const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
-      const hay = [c.id, c.preventa_id, c.total, c.estado, c.fecha, clienteLabel]
+      const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "";
+      const hay = [c.id, c.preventa_id, caso, c.total, c.estado, c.fecha, clienteLabel]
         .map((x) => String(x ?? "").toLowerCase())
         .join(" | ");
       return hay.includes(q);
@@ -1032,8 +1135,9 @@ export default function Cotizaciones() {
               Cotizaciones
             </h2>
             <p>
-              Crea cotizaciones vinculadas a preventas, controla descuento y (opcional) plan 50/50.
-              En móvil, el historial se muestra en tarjetas para mejor lectura.
+              Estados de cotización: <strong>pendiente</strong>, <strong>preparacion</strong>, <strong>aceptada</strong>,{" "}
+              <strong>rechazada</strong>, <strong>cancelada</strong>. Si una cotización vinculada se marca como{" "}
+              <strong>rechazada</strong>, el ticket (preventa) se sincroniza a <strong>cancelada</strong>.
             </p>
           </HeaderLeft>
 
@@ -1161,13 +1265,9 @@ export default function Cotizaciones() {
             <Field>
               <Label>
                 <ShieldCheck size={14} />
-                Estado preventa
+                Estado ticket (preventa)
               </Label>
-              <Input
-                value={preventaCargada ? (preventaCargada.estado || "-") : "—"}
-                readOnly
-                placeholder="—"
-              />
+              <Input value={preventaCargada ? (preventaCargada.estado || "-") : "—"} readOnly placeholder="—" />
             </Field>
           </Split>
 
@@ -1471,36 +1571,35 @@ export default function Cotizaciones() {
           </Split>
         </FormCard>
 
-{/* ==================== Historial ==================== */}
-<div
-  style={{
-    marginTop: "1rem",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
-  }}
->
-  <div style={{ display: "grid", gap: 4 }}>
-    <div style={{ fontWeight: 950 }}>Historial</div>
-    <Muted>Busca por cliente, ID, estado o #preventa.</Muted>
-  </div>
+        {/* ==================== Historial ==================== */}
+        <div
+          style={{
+            marginTop: "1rem",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={{ fontWeight: 950 }}>Historial</div>
+            <Muted>Busca por cliente, ID, estado, #caso o #preventa.</Muted>
+          </div>
 
-  <div style={{ minWidth: 280, flex: 1, maxWidth: 520 }}>
-    <Field style={{ padding: "0.7rem 0.85rem", borderRadius: 999 }}>
-      <Label style={{ marginBottom: 6 }}>
-        <Search size={14} />
-        Buscar en historial
-      </Label>
-      <Input
-        value={historySearch}
-        onChange={(e) => setHistorySearch(e.target.value)}
-        placeholder="Ej: #12, pendiente, RNC, cliente..."
-      />
-    </Field>
-  </div>
-</div>
-
+          <div style={{ minWidth: 280, flex: 1, maxWidth: 520 }}>
+            <Field style={{ padding: "0.7rem 0.85rem", borderRadius: 999 }}>
+              <Label style={{ marginBottom: 6 }}>
+                <Search size={14} />
+                Buscar en historial
+              </Label>
+              <Input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Ej: #12, pendiente, rechazado, caso..."
+              />
+            </Field>
+          </div>
+        </div>
 
         {/* Desktop table */}
         <DesktopOnly>
@@ -1509,10 +1608,12 @@ export default function Cotizaciones() {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>#Caso</th>
                   <th>Cliente</th>
                   <th>Preventa</th>
                   <th>Total</th>
                   <th>Estado</th>
+                  <th>Cambiar estado</th>
                   <th>Anticipo</th>
                   <th>Fecha</th>
                   <th>Acciones</th>
@@ -1522,10 +1623,12 @@ export default function Cotizaciones() {
                 {historyFiltered.map((c) => {
                   const cli = c.cliente_ref || null;
                   const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
+                  const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "-";
 
                   return (
                     <tr key={c.id}>
                       <td>#{c.id}</td>
+                      <td>{caso}</td>
                       <td>{clienteLabel}</td>
                       <td>{c.preventa_id ? `#${c.preventa_id}` : "-"}</td>
                       <td>
@@ -1535,13 +1638,32 @@ export default function Cotizaciones() {
                         </strong>
                       </td>
                       <td>
-                        <EstadoBadge estado={c.estado || "pendiente"}>● {formatearEstado(c.estado)}</EstadoBadge>
+                        <EstadoBadge estado={c.estado || "pendiente"}>
+                          {estadoIcon(c.estado)} {formatearEstado(c.estado || "pendiente")}
+                        </EstadoBadge>
+                      </td>
+                      <td>
+                        <Select
+                          value={c.estado || "pendiente"}
+                          onChange={(e) => cambiarEstadoCotizacion(c, e.target.value)}
+                          style={{ marginTop: 0 }}
+                        >
+                          {estadosCotizacionOpciones().map((op) => (
+                            <option key={op.value} value={op.value}>
+                              {op.label}
+                            </option>
+                          ))}
+                        </Select>
                       </td>
                       <td>
                         {c.usa_anticipo ? (
                           <div style={{ display: "grid", gap: 2 }}>
-                            <span>Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong></span>
-                            <span>Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong></span>
+                            <span>
+                              Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong>
+                            </span>
+                            <span>
+                              Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong>
+                            </span>
                           </div>
                         ) : (
                           "No"
@@ -1571,12 +1693,16 @@ export default function Cotizaciones() {
           {historyFiltered.map((c) => {
             const cli = c.cliente_ref || null;
             const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
+            const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "-";
+
             return (
               <MobileCard key={c.id}>
                 <MobileHeader>
                   <MobileTitle>
                     <strong>#{c.id}</strong>
-                    <span>{clienteLabel}</span>
+                    <span>
+                      {clienteLabel} · Caso: {caso}
+                    </span>
                   </MobileTitle>
 
                   <RowActions>
@@ -1590,15 +1716,41 @@ export default function Cotizaciones() {
                 </MobileHeader>
 
                 <MobileMeta>
-                  <Pill>Total: <strong>RD${safeNumber(c.total, 0).toFixed(2)}</strong></Pill>
-                  <EstadoBadge estado={c.estado || "pendiente"}>● {formatearEstado(c.estado)}</EstadoBadge>
-                  {c.preventa_id ? <Pill>Preventa: <strong>#{c.preventa_id}</strong></Pill> : null}
+                  <Pill>
+                    Total: <strong>RD${safeNumber(c.total, 0).toFixed(2)}</strong>
+                  </Pill>
+                  <EstadoBadge estado={c.estado || "pendiente"}>
+                    {estadoIcon(c.estado)} {formatearEstado(c.estado || "pendiente")}
+                  </EstadoBadge>
+                  {c.preventa_id ? (
+                    <Pill>
+                      Preventa: <strong>#{c.preventa_id}</strong>
+                    </Pill>
+                  ) : null}
                 </MobileMeta>
+
+                <div>
+                  <Label style={{ marginBottom: 6 }}>
+                    <Ban size={14} />
+                    Cambiar estado
+                  </Label>
+                  <Select value={c.estado || "pendiente"} onChange={(e) => cambiarEstadoCotizacion(c, e.target.value)} style={{ marginTop: 0 }}>
+                    {estadosCotizacionOpciones().map((op) => (
+                      <option key={op.value} value={op.value}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
 
                 {c.usa_anticipo ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Badge>Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong></Badge>
-                    <Badge>Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong></Badge>
+                    <Badge>
+                      Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong>
+                    </Badge>
+                    <Badge>
+                      Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong>
+                    </Badge>
                   </div>
                 ) : (
                   <Muted>Anticipo: No</Muted>
