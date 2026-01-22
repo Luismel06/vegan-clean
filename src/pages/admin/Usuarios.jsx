@@ -537,8 +537,8 @@ export default function Usuarios() {
    *  - Cuenta todas las preventas por vendedor.
    *
    * Ventas:
-   *  - Cuenta SOLO las cotizaciones que llegaron a estado "despachada"
-   *    (es decir, pasaron por almacén y fueron despachadas).
+   *  - Cuenta SOLO las cotizaciones que llegaron a estado "despachado"
+   *    (es decir, pasaron por almacén y fueron despachados).
    *
    * Requisitos de datos (esperado):
    *  - preventas.vendedor_id guarda el identificador del vendedor (mismo que usuarios.auth_uid)
@@ -562,12 +562,12 @@ export default function Usuarios() {
         acc[vid].ordenes += 1;
       }
 
-      // 2) Ventas por vendedor (cotizaciones despachadas)
+      // 2) Ventas por vendedor (cotizaciones despachados)
       // Intentamos join vía FK: cotizaciones.preventa_id -> preventas.id
       const { data: cots, error: ec } = await supabase
         .from("cotizaciones")
         .select("id, estado, preventa_id, preventas:preventa_id ( vendedor_id )")
-        .eq("estado", "despachada");
+        .eq("estado", "despachado");
 
       if (ec) throw ec;
 
@@ -727,7 +727,7 @@ export default function Usuarios() {
         <TitleBox>
           <Title>Usuarios</Title>
           <Subtitle>
-            Gestión de cuentas internas (roles, área y datos de contacto). Las métricas de vendedores se basan en órdenes registradas y cotizaciones despachadas.
+            Gestión de cuentas internas (roles, área y datos de contacto). Las métricas de vendedores se basan en órdenes registradas y cotizaciones despachados.
           </Subtitle>
         </TitleBox>
 
@@ -825,7 +825,7 @@ export default function Usuarios() {
               <ClipboardList size={14} /> Órdenes = preventas registradas
             </Badge>
             <Badge>
-              <ShoppingBag size={14} /> Ventas = cotizaciones <b>despachadas</b>
+              <ShoppingBag size={14} /> Ventas = cotizaciones <b>despachados</b>
             </Badge>
           </RowMeta>
           <Hint style={{ marginTop: 12 }}>

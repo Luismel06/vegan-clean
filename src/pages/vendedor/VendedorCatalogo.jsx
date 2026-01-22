@@ -57,7 +57,7 @@ const Tabs = styled.div`
 const Tab = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
-  color: ${({ $active, theme }) => ($active ? "#000" : theme.text)};
+  color: ${({ $active, theme }) => ($active ? "#000" : theme.accent)};
   border-radius: 999px;
   padding: 0.55rem 0.95rem;
   font-weight: 1000;
@@ -144,7 +144,7 @@ const FilterRow = styled.div`
 const Select = styled.select`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   border-radius: 14px;
   padding: 0.65rem 0.8rem;
   outline: none;
@@ -178,7 +178,7 @@ const PillBtn = styled.button`
   display: grid;
   place-items: center;
   padding: 0;
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
 
   &:hover {
     opacity: 0.9;
@@ -273,7 +273,7 @@ const Qty = styled.input`
   border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.background};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   outline: none;
 `;
 
@@ -354,7 +354,7 @@ const RemoveBtn = styled.button`
   margin-top: 8px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   border-radius: 12px;
   padding: 0.35rem 0.6rem;
   cursor: pointer;
