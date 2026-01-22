@@ -130,7 +130,7 @@ const PrimaryBtn = styled(BtnBase)`
 const GhostBtn = styled(BtnBase)`
   background: ${({ theme }) => theme.cardBackground};
   border-color: ${({ theme }) => theme.border};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
 
   &:hover {
     border-color: ${({ theme }) => theme.accent};
@@ -198,7 +198,7 @@ const Input = styled.input`
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   font-weight: 800;
 
   &::placeholder {
@@ -219,7 +219,7 @@ const Select = styled.select`
   border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   font-weight: 800;
 
   &:focus {
@@ -299,7 +299,7 @@ const DangerBtn = styled(BtnBase)`
 const IconBtn = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   width: 36px;
   height: 36px;
   border-radius: 12px;

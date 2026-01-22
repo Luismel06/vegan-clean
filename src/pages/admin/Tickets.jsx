@@ -136,7 +136,7 @@ const PrimaryBtn = styled(BtnBase)`
 const GhostBtn = styled(BtnBase)`
   background: ${({ theme }) => theme.cardBackground};
   border-color: ${({ theme }) => theme.border};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
 `;
 
 /* =========================
@@ -255,7 +255,7 @@ const TabsWrap = styled.div`
 const TabButton = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ $active, theme }) => ($active ? theme.accentSoft : theme.cardBackground)};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   border-radius: 999px;
   padding: 0.62rem 0.85rem;
   cursor: pointer;

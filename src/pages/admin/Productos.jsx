@@ -156,14 +156,14 @@ const Select = styled.select`
   width: 100%;
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   border-radius: 10px;
   padding: 0.6rem 0.8rem;
   outline: none;
 
   option {
     background: ${({ theme }) => theme.cardBackground};
-    color: ${({ theme }) => theme.text};
+    color: ${({ theme }) => theme.accent};
   }
 `;
 

@@ -200,7 +200,7 @@ const PrimaryBtn = styled(BtnBase)`
 const GhostBtn = styled(BtnBase)`
   background: ${({ theme }) => theme.cardBackground};
   border-color: ${({ theme }) => theme.border};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
 `;
 
 const Card = styled.div`
@@ -282,7 +282,7 @@ const PillRow = styled.div`
 const Pill = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ $active, theme }) => ($active ? theme.accentSoft : theme.cardBackground)};
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accent};
   border-radius: 999px;
   padding: 0.55rem 0.78rem;
   cursor: pointer;
