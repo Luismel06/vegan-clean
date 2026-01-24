@@ -1613,7 +1613,7 @@ export default function Cotizaciones() {
                   <th>Preventa</th>
                   <th>Total</th>
                   <th>Estado</th>
-                  <th>Cambiar estado</th>
+
                   <th>Anticipo</th>
                   <th>Fecha</th>
                   <th>Acciones</th>
@@ -1641,19 +1641,6 @@ export default function Cotizaciones() {
                         <EstadoBadge estado={c.estado || "pendiente"}>
                           {estadoIcon(c.estado)} {formatearEstado(c.estado || "pendiente")}
                         </EstadoBadge>
-                      </td>
-                      <td>
-                        <Select
-                          value={c.estado || "pendiente"}
-                          onChange={(e) => cambiarEstadoCotizacion(c, e.target.value)}
-                          style={{ marginTop: 0 }}
-                        >
-                          {estadosCotizacionOpciones().map((op) => (
-                            <option key={op.value} value={op.value}>
-                              {op.label}
-                            </option>
-                          ))}
-                        </Select>
                       </td>
                       <td>
                         {c.usa_anticipo ? (
