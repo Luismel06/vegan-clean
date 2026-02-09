@@ -25,7 +25,7 @@ import {
 /* =========================
    CONFIG
 ========================= */
-const ROLES = ["admin", "vendedor", "finanza", "almacenista"];
+const ROLES = ["admin", "vendedor", "almacenista"];
 const AREAS_SUGERIDAS = [
   "LA VEGA",
   "SANTO DOMINGO",
@@ -471,7 +471,6 @@ function RoleBadge({ rol }) {
   if (r === "admin") return <BadgeSoft><Shield size={14} /> admin</BadgeSoft>;
   if (r === "vendedor") return <BadgeSoft><UserCheck size={14} /> vendedor</BadgeSoft>;
   if (r === "almacenista") return <BadgeSoft><Warehouse size={14} /> almacenista</BadgeSoft>;
-  if (r === "finanza") return <BadgeSoft><BadgeDollarSign size={14} /> finanza</BadgeSoft>;
   return <Badge>{r || "-"}</Badge>;
 }
 
@@ -596,7 +595,7 @@ export default function Usuarios() {
 
   const summary = useMemo(() => {
     const total = rows.length;
-    const byRole = { admin: 0, vendedor: 0, almacenista: 0, finanza: 0, other: 0 };
+    const byRole = { admin: 0, vendedor: 0, almacenista: 0, other: 0 };
 
     for (const u of rows) {
       const r = normalizeRole(u.rol);
@@ -797,16 +796,6 @@ export default function Usuarios() {
               <div>
                 <StatTitle>Almacén</StatTitle>
                 <StatValue>{summary.byRole.almacenista}</StatValue>
-              </div>
-            </Stat>
-
-            <Stat>
-              <StatIcon>
-                <BadgeDollarSign size={18} />
-              </StatIcon>
-              <div>
-                <StatTitle>Finanzas</StatTitle>
-                <StatValue>{summary.byRole.finanza}</StatValue>
               </div>
             </Stat>
           </StatGrid>

@@ -91,6 +91,7 @@ const HeaderRight = styled.div`
 /* =========================
    Buttons
 ========================= */
+
 const BtnBase = styled.button`
   border: 1px solid transparent;
   border-radius: 999px;
@@ -707,7 +708,7 @@ export default function Cotizaciones() {
           }
         }
       } catch (e) {
-        console.warn("⚠️ No se pudo auto-vincular cliente desde preventa:", e);
+        console.warn("No se pudo auto-vincular cliente desde preventa:", e);
       }
 
       const { data: detPrev, error: errDet } = await supabase
@@ -775,7 +776,7 @@ export default function Cotizaciones() {
         fetchPreventas();
       }
     } catch (e) {
-      console.error("❌ preloadDesdePreventa:", e);
+      console.error("preloadDesdePreventa:", e);
       Swal.fire("Error", "No se pudo precargar la preventa en la cotización.", "error");
     } finally {
       setLoadingPreventa(false);

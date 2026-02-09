@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 /* ==================== ESTILOS ==================== */
+
 const Wrapper = styled.div`
   padding: 1.5rem 2rem;
   max-width: 1200px;
@@ -482,7 +483,7 @@ export default function Equipos() {
         modelo: modelo || null,
         descripcion: form.descripcion || null,
         imagen_url: uploadedPath || null,
-        // ✅ codigo_barra lo crea el trigger
+        // codigo_barra lo crea el trigger
       };
 
       const { data, error } = await supabase.from("equipos").insert([payload]).select().single();
