@@ -798,7 +798,7 @@ export default function Finanzas() {
       if (!baseDate) continue;
 
       const k = ymd(baseDate);
-      map.set(k, (map.get(k), 0) + safeNumber(c.total, 0));
+      map.set(k, (map.get(k) || 0) + safeNumber(c.total, 0));
     }
 
     const start = startOfMonth(mesCursor);
