@@ -720,6 +720,7 @@ export default function Finanzas() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
   const [usuariosMap, setUsuariosMap] = useState(new Map());
+  const [montoAdeudadoLedger, setMontoAdeudadoLedger] = useState(0);
 
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
@@ -746,13 +747,7 @@ export default function Finanzas() {
       .filter((c) => (c.estado || "").toLowerCase() === "preparacion")
       .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
 
-    const montoAdeudado = cotizaciones
-      .filter((c) => {
-        const st = (c.estado || "").toLowerCase();
-        const mp = safeNumber(c.monto_pendiente, 0);
-        return mp > 0 && c.usa_anticipo && ["aceptada", "preparacion", "despachado"].includes(st);
-      })
-      .reduce((acc, c) => acc + safeNumber(c.monto_pendiente, 0), 0);
+    const montoAdeudado = Math.max(safeNumber(montoAdeudadoLedger, 0), 0);
 
     const ventasCount = cotizaciones.filter((c) => estadosVentaReal.includes((c.estado || "").toLowerCase())).length;
     const ticketProm = ventasCount ? totalVendido / ventasCount : 0;
@@ -777,7 +772,7 @@ export default function Finanzas() {
       aceptadasCount,
       conversion,
     };
-  }, [cotizaciones]);
+  }, [cotizaciones, montoAdeudadoLedger]);
 
   const pieEstados = useMemo(() => {
     const map = new Map();
@@ -926,6 +921,28 @@ export default function Finanzas() {
       const cotRows = (cot || []).map((c) => ({ ...c, estado: (c.estado || "pendiente").toLowerCase() }));
       setCotizaciones(cotRows);
 
+      const { data: saldosClientes, error: saldosErr } = await supabase
+        .from("clientes_admin_panel")
+        .select("id, saldo_total");
+
+      if (saldosErr) {
+        console.warn("clientes_admin_panel:", saldosErr);
+        const fallbackAdeudado = cotRows
+          .filter((c) => {
+            const st = (c.estado || "").toLowerCase();
+            const mp = safeNumber(c.monto_pendiente, 0);
+            return mp > 0 && ["aceptada", "preparacion", "despachado"].includes(st);
+          })
+          .reduce((acc, c) => acc + safeNumber(c.monto_pendiente, 0), 0);
+        setMontoAdeudadoLedger(Number(fallbackAdeudado.toFixed(2)));
+      } else {
+        const totalAdeudado = (saldosClientes || []).reduce((acc, row) => {
+          const saldo = safeNumber(row?.saldo_total, 0);
+          return acc + (saldo > 0 ? saldo : 0);
+        }, 0);
+        setMontoAdeudadoLedger(Number(totalAdeudado.toFixed(2)));
+      }
+
       const { data: mov, error: movErr } = await supabase
         .from("movimientos_finanzas")
         .select("id, created_at, actor_nombre, actor_rol, accion, cotizacion_id, preventa_id, monto, estado_anterior, estado_nuevo, meta")
@@ -956,6 +973,7 @@ export default function Finanzas() {
       await cargarTop10({ cotizacionesMes: cotRows, mode: topMode });
     } catch (e) {
       console.error(e);
+      setMontoAdeudadoLedger(0);
       Swal.fire("Error", "No se pudieron cargar los datos de Finanzas.", "error");
     } finally {
       setLoading(false);
@@ -1252,7 +1270,7 @@ export default function Finanzas() {
               <DollarSign size={16} />
             </StatTop>
             <StatValue>{fmtMoney(stats.montoAdeudado)}</StatValue>
-            <Muted>Sumatoria de monto_pendiente (plan 50/50) en aceptadas/preparación/despachadas.</Muted>
+            <Muted>Saldo pendiente en ledger de fiados (fiado - pagos).</Muted>
           </StatCard>
 
           <StatCard>
