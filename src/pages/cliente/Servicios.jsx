@@ -1,10 +1,11 @@
-// src/pages/cliente/Servicios.jsx
+﻿// src/pages/cliente/Servicios.jsx
 import { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
 import emailjs from "emailjs-com";
 import { supabase } from "../../supabase/supabase.config";
+import { AREAS_CLIENTE, isAreaClienteValida, normalizeAreaCliente } from "../../shared/areasCliente.js";
 
 // ===================== LAYOUT BASE =====================
 const Container = styled.section`
@@ -995,7 +996,7 @@ export default function Servicios() {
 
     const emailEl = formEl.elements.email;
     const telEl = formEl.elements.telefono;
-    const dirEl = formEl.elements.direccion;
+    const areaEl = formEl.elements.area;
     const clienteEl = formEl.elements.cliente;
     const empresaNombreEl = formEl.elements.empresa_nombre;
 
@@ -1008,7 +1009,7 @@ export default function Servicios() {
 
         const { data, error } = await supabase
           .from("clientes")
-          .select("id, nombre, email, telefono, direccion, cedula")
+          .select("id, nombre, email, telefono, direccion, area, cedula")
           .eq("cedula", ced)
           .maybeSingle();
 
@@ -1018,7 +1019,10 @@ export default function Servicios() {
         if (clienteEl) clienteEl.value = data.nombre || clienteEl.value;
         if (emailEl) emailEl.value = data.email || emailEl.value;
         if (telEl) telEl.value = data.telefono || telEl.value;
-        if (dirEl) dirEl.value = data.direccion || dirEl.value;
+        if (areaEl) {
+          const area = normalizeAreaCliente(data.area || data.direccion);
+          if (isAreaClienteValida(area)) areaEl.value = area;
+        }
         return;
       }
 
@@ -1027,7 +1031,7 @@ export default function Servicios() {
 
       const { data, error } = await supabase
         .from("clientes")
-        .select("id, nombre, email, telefono, direccion, empresa_rnc")
+        .select("id, nombre, email, telefono, direccion, area, empresa_rnc")
         .eq("empresa_rnc", rnc)
         .maybeSingle();
 
@@ -1037,7 +1041,10 @@ export default function Servicios() {
       if (empresaNombreEl) empresaNombreEl.value = data.nombre || empresaNombreEl.value;
       if (emailEl) emailEl.value = data.email || emailEl.value;
       if (telEl) telEl.value = data.telefono || telEl.value;
-      if (dirEl) dirEl.value = data.direccion || dirEl.value;
+      if (areaEl) {
+        const area = normalizeAreaCliente(data.area || data.direccion);
+        if (isAreaClienteValida(area)) areaEl.value = area;
+      }
     } catch (err) {
       console.error("❌ Autocomplete error:", err);
     } finally {
@@ -1051,17 +1058,20 @@ export default function Servicios() {
     cliente,
     email,
     telefono,
-    direccion,
+    area,
     cedula,
     empresa_nombre,
     empresa_rnc,
   }) {
+    const areaNormalizada = normalizeAreaCliente(area);
+
     const base = {
       tipo_cliente: tipoClienteLocal,
       nombre: tipoClienteLocal === "empresa" ? (empresa_nombre || "").trim() : (cliente || "").trim(),
       telefono: (telefono || "").trim() || null,
       email: (email || "").trim() || null,
-      direccion: (direccion || "").trim() || null,
+      area: isAreaClienteValida(areaNormalizada) ? areaNormalizada : null,
+      direccion: isAreaClienteValida(areaNormalizada) ? areaNormalizada : null,
       es_recurrente: true,
     };
 
@@ -1129,7 +1139,7 @@ export default function Servicios() {
     const cliente = e.target.cliente.value.trim();
     const email = e.target.email.value.trim();
     const telefono = e.target.telefono.value.trim();
-    const direccion = e.target.direccion.value.trim();
+    const area = normalizeAreaCliente(e.target.area?.value || "");
     const nota = e.target.nota.value.trim();
 
     const cedulaRaw = tipoCliente === "persona" ? (e.target.cedula?.value || "").trim() : null;
@@ -1170,11 +1180,11 @@ export default function Servicios() {
       return;
     }
 
-    if (!direccion) {
+    if (!isAreaClienteValida(area)) {
       Swal.fire({
         icon: "warning",
-        title: "Dirección requerida",
-        text: "Por favor, indica tu dirección.",
+        title: "Area requerida",
+        text: "Selecciona una de las areas disponibles.",
         confirmButtonColor: "#0591e9",
       });
       return;
@@ -1185,7 +1195,7 @@ export default function Servicios() {
       cliente,
       email,
       telefono,
-      direccion,
+      area,
       cedula,
       empresa_nombre: empresa_nombreRaw,
       empresa_rnc,
@@ -1208,7 +1218,7 @@ export default function Servicios() {
             empresa_rnc: tipoCliente === "empresa" ? empresa_rnc : null,
             telefono,
             email,
-            direccion,
+            direccion: area,
             nota_cliente: nota || null,
             estado: "enviada",
             // cliente_id: clienteId, // si luego agregas este campo
@@ -1256,7 +1266,7 @@ export default function Servicios() {
             cliente,
             email,
             telefono,
-            direccion,
+            direccion: area,
             cedula: cedula || "",
             empresa_nombre: empresa_nombreRaw || "",
             empresa_rnc: empresa_rnc || "",
@@ -1273,7 +1283,9 @@ export default function Servicios() {
 
       try {
         localStorage.setItem("ultima_preventa_numero_caso", numero_caso);
-      } catch {}
+      } catch (storageErr) {
+        console.warn("No se pudo guardar el ultimo caso en localStorage:", storageErr);
+      }
 
       Swal.fire({
         icon: "success",
@@ -1309,7 +1321,9 @@ export default function Servicios() {
     try {
       const last = localStorage.getItem("ultima_preventa_numero_caso");
       if (last && !caseNumero) setCaseNumero(last);
-    } catch {}
+    } catch (storageErr) {
+      console.warn("No se pudo leer el ultimo caso desde localStorage:", storageErr);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1587,7 +1601,16 @@ export default function Servicios() {
                   <Input name="cliente" placeholder="Tu nombre completo" required />
                   <Input name="email" type="email" placeholder="Tu correo electrónico" required />
                   <Input name="telefono" placeholder="Tu número de teléfono" required />
-                  <Input name="direccion" placeholder="Dirección" required />
+                  <Input as="select" name="area" defaultValue="" required>
+                    <option value="" disabled>
+                      Selecciona tu area
+                    </option>
+                    {AREAS_CLIENTE.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </Input>
 
                   {autoLoading && (
                     <div style={{ fontSize: "0.88rem", opacity: 0.75, fontWeight: 700 }}>

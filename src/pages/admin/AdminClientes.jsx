@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import styled, { css } from "styled-components";
 import Swal from "sweetalert2";
+import { Link } from "react-router-dom";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import {
   Search,
@@ -302,6 +303,16 @@ const RowTop = styled.div`
 const RowName = styled.div`
   font-weight: 1000;
   word-break: break-word;
+`;
+
+const ClientLink = styled(Link)`
+  color: ${({ theme }) => theme.accent};
+  text-decoration: none;
+  font-weight: 1000;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `;
 
 const RowSub = styled.div`
@@ -859,7 +870,9 @@ export default function Clientes() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ fontWeight: 1000 }}>{r.nombre}</td>
+                  <td style={{ fontWeight: 1000 }}>
+                    <ClientLink to={`/admin/clientes/${r.id}`}>{r.nombre}</ClientLink>
+                  </td>
                   <td>{r.tipo_cliente}</td>
                   <td>{docLabel(r)}</td>
                   <td style={{ fontSize: 13, opacity: 0.95 }}>
@@ -923,7 +936,9 @@ export default function Clientes() {
               <MobileItem key={r.id}>
                 <RowTop>
                   <div>
-                    <RowName>{r.nombre}</RowName>
+                    <RowName>
+                      <ClientLink to={`/admin/clientes/${r.id}`}>{r.nombre}</ClientLink>
+                    </RowName>
                     <RowSub style={{ opacity: 0.85 }}>
                       {r.tipo_cliente} · {docLabel(r)}
                     </RowSub>

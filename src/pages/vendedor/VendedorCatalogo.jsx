@@ -1,10 +1,11 @@
-// src/pages/vendedor/VendedorCatalogo.jsx
+﻿// src/pages/vendedor/VendedorCatalogo.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import { loadCart, saveCart, clearCart } from "../../shared/cartStorage.js";
 import { Search, SlidersHorizontal, X, ShoppingCart } from "lucide-react";
+import { AREAS_CLIENTE, isAreaClienteValida, normalizeAreaCliente } from "../../shared/areasCliente.js";
 
 const Wrap = styled.section`
   padding: 1.6rem 2rem;
@@ -139,6 +140,35 @@ const FilterRow = styled.div`
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+`;
+
+const ClienteBar = styled.div`
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.cardBackground};
+  border-radius: 14px;
+  padding: 0.7rem 0.8rem;
+`;
+
+const ClienteSelect = styled.select`
+  flex: 1;
+  min-width: 260px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  outline: none;
+  font-weight: 700;
+`;
+
+const ClienteInfo = styled.div`
+  font-size: 0.85rem;
+  opacity: 0.88;
 `;
 
 const Select = styled.select`
@@ -489,6 +519,11 @@ function safeImg(url) {
   return url && String(url).trim() ? String(url).trim() : "/inicio.png";
 }
 
+function getClienteDocumento(cli) {
+  if (!cli) return "";
+  return cli.tipo_cliente === "empresa" ? cli.empresa_rnc || "" : cli.cedula || "";
+}
+
 /** ===== Generar número de caso ===== */
 function generarNumeroCaso() {
   const y = new Date().getFullYear();
@@ -536,6 +571,28 @@ async function getMyUid() {
   return localStorage.getItem("user_id") || null;
 }
 
+async function getVendedorScope() {
+  const { data: auth, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !auth?.user?.email) return { rol: null, area: null, authUid: null };
+
+  const { data: perfil, error } = await supabase
+    .from("usuarios")
+    .select("rol, area, auth_uid")
+    .eq("email", auth.user.email)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("No se pudo cargar el perfil del vendedor:", error);
+    return { rol: null, area: null, authUid: auth.user.id };
+  }
+
+  return {
+    rol: String(perfil?.rol || "").trim().toLowerCase() || null,
+    area: normalizeAreaCliente(perfil?.area),
+    authUid: perfil?.auth_uid || auth.user.id || null,
+  };
+}
+
 function guessDocType(docRaw) {
   const d = digitsOnly(docRaw);
   if (d.length === 11) return "cedula";
@@ -549,7 +606,7 @@ async function buscarClientePorDocumento(documento) {
 
   const { data: cliCed } = await supabase
     .from("clientes")
-    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, area")
     .or(`cedula.eq.${doc},cedula.eq.${docDigits}`)
     .maybeSingle();
 
@@ -557,17 +614,18 @@ async function buscarClientePorDocumento(documento) {
 
   const { data: cliRnc } = await supabase
     .from("clientes")
-    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, area")
     .or(`empresa_rnc.eq.${doc},empresa_rnc.eq.${docDigits}`)
     .maybeSingle();
 
   return cliRnc || null;
 }
 
-async function modalCrearCliente({ documento }) {
+async function modalCrearCliente({ documento, areaFijada = "" }) {
   const docDigits = digitsOnly(documento);
   const docType = guessDocType(documento);
   const defaultTipo = docType === "rnc" ? "empresa" : "persona";
+  const areaDefault = isAreaClienteValida(areaFijada) ? normalizeAreaCliente(areaFijada) : "";
 
   const { isConfirmed, value } = await Swal.fire({
     title: "Crear cliente",
@@ -615,14 +673,19 @@ async function modalCrearCliente({ documento }) {
         </div>
 
         <div style="grid-column: 1 / -1;">
-          <label style="font-weight:800; display:block; margin-bottom:6px;">Dirección</label>
-          <input id="direccion" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" placeholder="Dirección del cliente" />
+          <label style="font-weight:800; display:block; margin-bottom:6px;">Área</label>
+          <select id="area" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" ${areaDefault ? "disabled" : ""}>
+            <option value="">Selecciona un área</option>
+            ${AREAS_CLIENTE.map((a) => `<option value="${a}">${a}</option>`).join("")}
+          </select>
         </div>
       </div>
     `,
     didOpen: () => {
       const tipoEl = document.getElementById("tipo_cliente");
       tipoEl.value = defaultTipo;
+      const areaEl = document.getElementById("area");
+      if (areaEl) areaEl.value = areaDefault || "";
     },
     preConfirm: () => {
       const tipo_cliente = document.getElementById("tipo_cliente").value;
@@ -630,10 +693,14 @@ async function modalCrearCliente({ documento }) {
       const nombre = cleanDoc(document.getElementById("nombre").value);
       const telefono = cleanDoc(document.getElementById("telefono").value);
       const email = cleanDoc(document.getElementById("email").value);
-      const direccion = cleanDoc(document.getElementById("direccion").value);
+      const area = normalizeAreaCliente(areaDefault || document.getElementById("area")?.value || "");
 
       if (!nombre) {
         Swal.showValidationMessage("Debes escribir el nombre / razón social.");
+        return null;
+      }
+      if (!isAreaClienteValida(area)) {
+        Swal.showValidationMessage("Debes seleccionar un área válida.");
         return null;
       }
 
@@ -642,14 +709,12 @@ async function modalCrearCliente({ documento }) {
           Swal.showValidationMessage("Cédula inválida. Debe ser de 11 dígitos y válida.");
           return null;
         }
-      } else {
-        if (!isValidRNC(doc)) {
-          Swal.showValidationMessage("RNC inválido. Debe ser de 9 dígitos y válido.");
-          return null;
-        }
+      } else if (!isValidRNC(doc)) {
+        Swal.showValidationMessage("RNC inválido. Debe ser de 9 dígitos y válido.");
+        return null;
       }
 
-      return { tipo_cliente, doc, nombre, telefono, email, direccion };
+      return { tipo_cliente, doc, nombre, telefono, email, area };
     },
   });
 
@@ -662,7 +727,8 @@ async function modalCrearCliente({ documento }) {
     empresa_rnc: value.tipo_cliente === "empresa" ? value.doc : null,
     telefono: value.telefono || null,
     email: value.email || null,
-    direccion: value.direccion || null,
+    area: value.area || null,
+    direccion: value.area || null,
   };
 
   const onConflict = value.tipo_cliente === "persona" ? "cedula" : "empresa_rnc";
@@ -670,7 +736,7 @@ async function modalCrearCliente({ documento }) {
   const { data, error } = await supabase
     .from("clientes")
     .upsert(payload, { onConflict })
-    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion")
+    .select("id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, area")
     .single();
 
   if (error) throw error;
@@ -692,6 +758,9 @@ export default function VendedorCatalogo() {
   const [fCategoria, setFCategoria] = useState("");
   const [fMarca, setFMarca] = useState("");
   const [fOrden, setFOrden] = useState("recientes"); // recientes | precio_asc | precio_desc | nombre_asc
+  const [scopeArea, setScopeArea] = useState("");
+  const [clientesZona, setClientesZona] = useState([]);
+  const [clienteSelId, setClienteSelId] = useState("");
 
   useEffect(() => {
     cargar();
@@ -702,9 +771,44 @@ export default function VendedorCatalogo() {
     saveCart(cart);
   }, [cart]);
 
+  async function loadClientesZona(areaValue) {
+    if (!isAreaClienteValida(areaValue)) {
+      setClientesZona([]);
+      setClienteSelId("");
+      return;
+    }
+
+    const fields = "id, tipo_cliente, nombre, cedula, empresa_rnc, telefono, email, direccion, area";
+
+    const { data: porArea, error: eArea } = await supabase
+      .from("clientes")
+      .select(fields)
+      .eq("area", areaValue)
+      .order("nombre", { ascending: true });
+    if (eArea) throw eArea;
+
+    const { data: legacyDir, error: eLegacy } = await supabase
+      .from("clientes")
+      .select(fields)
+      .is("area", null)
+      .eq("direccion", areaValue)
+      .order("nombre", { ascending: true });
+    if (eLegacy) throw eLegacy;
+
+    const merged = [...(porArea || []), ...(legacyDir || [])];
+    const dedup = Array.from(new Map(merged.map((c) => [c.id, c])).values());
+    dedup.sort((a, b) => String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es"));
+
+    setClientesZona(dedup);
+    setClienteSelId((prev) => (dedup.some((c) => String(c.id) === String(prev)) ? prev : ""));
+  }
+
   async function cargar() {
     try {
       setLoading(true);
+      const scope = await getVendedorScope();
+      setScopeArea(scope?.area || "");
+      await loadClientesZona(scope?.area || "");
 
       const { data: prods, error: e1 } = await supabase
         .from("productos")
@@ -824,6 +928,37 @@ export default function VendedorCatalogo() {
     [cart]
   );
 
+  const selectedCliente = useMemo(
+    () => clientesZona.find((c) => String(c.id) === String(clienteSelId)) || null,
+    [clientesZona, clienteSelId]
+  );
+
+  async function seleccionarClienteConControl(nextId) {
+    const next = String(nextId || "");
+    const prev = String(clienteSelId || "");
+    if (next === prev) return true;
+
+    if (cart.length > 0 && prev) {
+      const ok = await Swal.fire({
+        icon: "warning",
+        title: "Cambiar cliente",
+        text: "Si cambias de cliente, el carrito actual se vaciará para evitar mezclar órdenes.",
+        showCancelButton: true,
+        confirmButtonText: "Cambiar y vaciar",
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "#ef4444",
+      });
+
+      if (!ok.isConfirmed) return false;
+
+      clearCart();
+      setCart([]);
+    }
+
+    setClienteSelId(next);
+    return true;
+  }
+
   async function pedirDocumentoConValidacion() {
     const { isConfirmed, value } = await Swal.fire({
       title: "Documento del cliente",
@@ -862,9 +997,13 @@ export default function VendedorCatalogo() {
     return value || null;
   }
 
-  async function enviarOrden() {
-    if (!cart.length) {
-      Swal.fire("Carrito vacío", "Agrega productos/equipos antes de enviar.", "warning");
+  async function buscarOCrearYSeleccionarCliente() {
+    if (!isAreaClienteValida(scopeArea)) {
+      Swal.fire(
+        "Área no configurada",
+        "Tu cuenta de vendedor no tiene área asignada. Pide al admin asignarte una zona.",
+        "warning"
+      );
       return;
     }
 
@@ -875,8 +1014,79 @@ export default function VendedorCatalogo() {
       let cliente = await buscarClientePorDocumento(documento);
 
       if (!cliente) {
-        cliente = await modalCrearCliente({ documento });
+        cliente = await modalCrearCliente({ documento, areaFijada: scopeArea });
         if (!cliente) return;
+      } else {
+        const areaCliente = normalizeAreaCliente(cliente.area || cliente.direccion);
+        if (areaCliente && areaCliente !== scopeArea) {
+          Swal.fire(
+            "Cliente existente en otra zona",
+            `El cliente existe, pero pertenece a ${areaCliente}. Tu zona es ${scopeArea}.`,
+            "warning"
+          );
+          return;
+        }
+
+        if (!areaCliente) {
+          const { error: eArea } = await supabase
+            .from("clientes")
+            .update({ area: scopeArea, direccion: scopeArea })
+            .eq("id", cliente.id);
+          if (eArea) throw eArea;
+
+          cliente = { ...cliente, area: scopeArea, direccion: scopeArea };
+        }
+      }
+
+      await loadClientesZona(scopeArea);
+      const changed = await seleccionarClienteConControl(String(cliente.id));
+      if (!changed) return;
+      Swal.fire("Listo", `Cliente seleccionado: ${cliente.nombre}`, "success");
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", e.message || "No se pudo seleccionar/crear el cliente.", "error");
+    }
+  }
+
+  async function enviarOrden() {
+    if (!cart.length) {
+      Swal.fire("Carrito vacío", "Agrega productos/equipos antes de enviar.", "warning");
+      return;
+    }
+    if (!isAreaClienteValida(scopeArea)) {
+      Swal.fire(
+        "Área no configurada",
+        "Tu cuenta de vendedor no tiene área asignada. Pide al admin asignarte una zona.",
+        "warning"
+      );
+      return;
+    }
+    if (!selectedCliente) {
+      Swal.fire(
+        "Selecciona un cliente",
+        "Debes seleccionar primero un cliente de tu zona para poder enviar la orden.",
+        "warning"
+      );
+      return;
+    }
+
+    try {
+      let cliente = selectedCliente;
+      const areaCliente = normalizeAreaCliente(cliente.area || cliente.direccion);
+      if (!areaCliente) {
+        const { error: eArea } = await supabase
+          .from("clientes")
+          .update({ area: scopeArea, direccion: scopeArea })
+          .eq("id", cliente.id);
+        if (eArea) throw eArea;
+        cliente = { ...cliente, area: scopeArea, direccion: scopeArea };
+      } else if (areaCliente !== scopeArea) {
+        Swal.fire(
+          "Cliente fuera de tu área",
+          `Este cliente pertenece a ${areaCliente}. Tu área asignada es ${scopeArea}.`,
+          "warning"
+        );
+        return;
       }
 
       const myUid = await getMyUid();
@@ -894,12 +1104,12 @@ export default function VendedorCatalogo() {
         cliente_id: cliente.id,
         tipo_cliente: tipoCliente,
         cliente: cliente.nombre || "Cliente",
-        cedula: tipoCliente === "persona" ? (cliente.cedula || documento) : null,
+        cedula: tipoCliente === "persona" ? (cliente.cedula || getClienteDocumento(cliente) || null) : null,
         empresa_nombre: tipoCliente === "empresa" ? cliente.nombre : null,
-        empresa_rnc: tipoCliente === "empresa" ? (cliente.empresa_rnc || documento) : null,
+        empresa_rnc: tipoCliente === "empresa" ? (cliente.empresa_rnc || getClienteDocumento(cliente) || null) : null,
         telefono: cliente.telefono,
         email: cliente.email,
-        direccion: cliente.direccion,
+        direccion: cliente.area || cliente.direccion || scopeArea,
         estado: "enviada",
       };
 
@@ -982,6 +1192,41 @@ export default function VendedorCatalogo() {
           <Secondary onClick={cargar}>Recargar</Secondary>
         </RightControls>
       </TopBar>
+
+      <ClienteBar>
+        <ClienteInfo>
+          Zona asignada: <strong>{scopeArea || "Sin zona"}</strong>
+        </ClienteInfo>
+
+        <ClienteSelect
+          value={clienteSelId}
+          onChange={(e) => {
+            void seleccionarClienteConControl(e.target.value);
+          }}
+          disabled={!isAreaClienteValida(scopeArea)}
+        >
+          <option value="">
+            {isAreaClienteValida(scopeArea)
+              ? "Selecciona un cliente de tu zona"
+              : "No tienes zona asignada"}
+          </option>
+          {clientesZona.map((cli) => (
+            <option key={cli.id} value={String(cli.id)}>
+              {cli.nombre} · {getClienteDocumento(cli) || "sin doc"}
+            </option>
+          ))}
+        </ClienteSelect>
+
+        <Secondary onClick={buscarOCrearYSeleccionarCliente} disabled={!isAreaClienteValida(scopeArea)}>
+          Buscar/crear por cédula o RNC
+        </Secondary>
+
+        <ClienteInfo>
+          {selectedCliente
+            ? `Cliente seleccionado: ${selectedCliente.nombre}`
+            : "Debes seleccionar un cliente antes de enviar la orden."}
+        </ClienteInfo>
+      </ClienteBar>
 
       <ControlsBar>
         <SearchBox>
@@ -1086,10 +1331,13 @@ export default function VendedorCatalogo() {
                         <Qty
                           type="number"
                           min="1"
+                          disabled={!selectedCliente}
                           value={qtyDraft[k] ?? 1}
                           onChange={(e) => setQtyDraft((p) => ({ ...p, [k]: Number(e.target.value) }))}
                         />
-                        <Btn onClick={() => addToCart(tipoActual, it)}>Agregar</Btn>
+                        <Btn onClick={() => addToCart(tipoActual, it)} disabled={!selectedCliente}>
+                          Agregar
+                        </Btn>
                       </Actions>
                     </Body>
                   </Card>
@@ -1155,7 +1403,7 @@ export default function VendedorCatalogo() {
               Vaciar
             </Secondary>
 
-            <Btn onClick={enviarOrden} disabled={!cart.length}>
+            <Btn onClick={enviarOrden} disabled={!cart.length || !selectedCliente}>
               Enviar orden
             </Btn>
           </CartFooter>
@@ -1187,7 +1435,7 @@ export default function VendedorCatalogo() {
             Vaciar
           </Secondary>
 
-          <Btn onClick={enviarOrden} disabled={!cart.length}>
+          <Btn onClick={enviarOrden} disabled={!cart.length || !selectedCliente}>
             Enviar
           </Btn>
         </MobileActions>

@@ -1,4 +1,4 @@
-// src/pages/admin/Usuarios.jsx
+﻿// src/pages/admin/Usuarios.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled, { css } from "styled-components";
 import Swal from "sweetalert2";
@@ -21,19 +21,13 @@ import {
   ShoppingBag,
   ClipboardList,
 } from "lucide-react";
+import { AREAS_CLIENTE, normalizeAreaCliente } from "../../shared/areasCliente.js";
 
 /* =========================
    CONFIG
 ========================= */
 const ROLES = ["admin", "vendedor", "almacenista"];
-const AREAS_SUGERIDAS = [
-  "LA VEGA",
-  "SANTO DOMINGO",
-  "SANTIAGO",
-  "LA ROMANA",
-  "SAN CRISTOBAL",
-  "OTRA",
-];
+const AREAS_SUGERIDAS = AREAS_CLIENTE;
 
 function safeText(v) {
   return String(v ?? "").toLowerCase().trim();
@@ -310,6 +304,23 @@ const BadgeSoft = styled(Badge)`
   color: ${({ theme }) => theme.text};
 `;
 
+const ZoneFilterBtn = styled.button`
+  border: 1px solid ${({ theme, $active }) => ($active ? theme.accent : theme.border)};
+  background: ${({ theme, $active }) => ($active ? theme.accent + "22" : theme.cardBackground)};
+  color: ${({ theme }) => theme.text};
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-weight: 1000;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+
+  &:hover {
+    opacity: 0.95;
+  }
+`;
+
 const BadgeWarn = styled(Badge)`
   background: rgba(245, 158, 11, 0.14);
   border-color: rgba(245, 158, 11, 0.35);
@@ -488,6 +499,7 @@ export default function Usuarios() {
   // stats: { [vendedor_auth_uid]: { ordenes, ventas } }
   const [stats, setStats] = useState({});
   const [q, setQ] = useState("");
+  const [zonaFiltro, setZonaFiltro] = useState("");
 
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -586,12 +598,19 @@ export default function Usuarios() {
 
   const filtered = useMemo(() => {
     const qq = safeText(q);
-    if (!qq) return rows;
-    return (rows || []).filter((u) => {
-      const hay = [u.email, u.nombre, u.rol, u.telefono, u.area].map(safeText).join(" | ");
-      return hay.includes(qq);
-    });
-  }, [rows, q]);
+    const zonaActiva = normalizeAreaCliente(zonaFiltro);
+
+    return (rows || [])
+      .filter((u) => {
+        if (!zonaActiva) return true;
+        return normalizeAreaCliente(u.area) === zonaActiva;
+      })
+      .filter((u) => {
+        if (!qq) return true;
+        const hay = [u.email, u.nombre, u.rol, u.telefono, u.area].map(safeText).join(" | ");
+        return hay.includes(qq);
+      });
+  }, [rows, q, zonaFiltro]);
 
   const summary = useMemo(() => {
     const total = rows.length;
@@ -611,10 +630,23 @@ export default function Usuarios() {
     return { total, byRole, vinculados, vendedoresNoVinculados };
   }, [rows]);
 
+  const zonasRegistradas = useMemo(() => {
+    const base = AREAS_SUGERIDAS.map(normalizeAreaCliente).filter(Boolean);
+    const extras = Array.from(
+      new Set(
+        (rows || [])
+          .map((u) => normalizeAreaCliente(u.area))
+          .filter((z) => z && !base.includes(z))
+      )
+    ).sort((a, b) => a.localeCompare(b, "es"));
+
+    return [...base, ...extras];
+  }, [rows]);
+
   function openCreate() {
     setMode("create");
     setCurrent(null);
-    setForm({ email: "", nombre: "", rol: "vendedor", telefono: "", area: "LA VEGA" });
+    setForm({ email: "", nombre: "", rol: "vendedor", telefono: "", area: AREAS_SUGERIDAS[0] || "" });
     setModalOpen(true);
   }
 
@@ -637,10 +669,16 @@ export default function Usuarios() {
       const rol = normalizeRole(form.rol);
       const nombre = String(form.nombre || "").trim();
       const telefono = String(form.telefono || "").trim();
-      const area = String(form.area || "").trim();
+      const area = normalizeAreaCliente(form.area);
 
       if (!email) return Swal.fire("Falta email", "Debes colocar el email.", "warning");
       if (!ROLES.includes(rol)) return Swal.fire("Rol inválido", "Selecciona un rol válido.", "warning");
+      if (rol === "vendedor" && !area) {
+        return Swal.fire("Falta área", "Debes asignar un área al vendedor.", "warning");
+      }
+      if (rol === "vendedor" && !AREAS_SUGERIDAS.includes(area)) {
+        return Swal.fire("Área inválida", "Selecciona una de las áreas permitidas.", "warning");
+      }
 
       setSaving(true);
 
@@ -817,6 +855,34 @@ export default function Usuarios() {
               <ShoppingBag size={14} /> Ventas = cotizaciones <b>despachados</b>
             </Badge>
           </RowMeta>
+
+          <div style={{ height: 10 }} />
+          <div style={{ fontWeight: 900, fontSize: "0.85rem", opacity: 0.9 }}>Zonas registradas</div>
+          <RowMeta style={{ marginTop: 8 }}>
+            <ZoneFilterBtn type="button" $active={!zonaFiltro} onClick={() => setZonaFiltro("")}>
+              Todas
+            </ZoneFilterBtn>
+            {zonasRegistradas.map((z) => {
+              const active = normalizeAreaCliente(zonaFiltro) === z;
+              return (
+                <ZoneFilterBtn
+                  key={z}
+                  type="button"
+                  $active={active}
+                  onClick={() => setZonaFiltro((prev) => (normalizeAreaCliente(prev) === z ? "" : z))}
+                >
+                  {z}
+                </ZoneFilterBtn>
+              );
+            })}
+          </RowMeta>
+
+          {zonaFiltro ? (
+            <Hint style={{ marginTop: 10 }}>
+              Filtro activo: <b>{normalizeAreaCliente(zonaFiltro)}</b>.
+            </Hint>
+          ) : null}
+
           <Hint style={{ marginTop: 12 }}>
             Si un vendedor aparece como <b>No vinculado</b>, sus métricas se mostrarán en 0.
           </Hint>
@@ -1019,7 +1085,11 @@ export default function Usuarios() {
                 <Field style={{ gridColumn: "1 / -1" }}>
                   <label>Área</label>
                   <select
-                    value={AREAS_SUGERIDAS.includes(form.area) ? form.area : ""}
+                    value={
+                      AREAS_SUGERIDAS.includes(normalizeAreaCliente(form.area))
+                        ? normalizeAreaCliente(form.area)
+                        : ""
+                    }
                     onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
                   >
                     <option value="">(Sin área)</option>
@@ -1029,15 +1099,7 @@ export default function Usuarios() {
                       </option>
                     ))}
                   </select>
-
-                  <input
-                    value={form.area}
-                    onChange={(e) => setForm((p) => ({ ...p, area: e.target.value }))}
-                    placeholder="Área personalizada (opcional)"
-                    style={{ marginTop: 8 }}
-                  />
-
-                  <small>Se guarda en la columna <b>area</b>.</small>
+                  <small>Se guarda en la columna <b>area</b> de <b>usuarios</b>.</small>
                 </Field>
               </FormGrid>
             </ModalBody>

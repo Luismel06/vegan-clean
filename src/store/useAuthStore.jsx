@@ -4,7 +4,7 @@ import { supabase } from "../supabase/supabase.config.jsx";
 export const useAuthStore = create((set) => ({
   user: null,
   rol: "none",
-  loading: true, // << NEW (important)
+  loading: true,
 
   // --- Login Google ---
   loginGoogle: async () => {
@@ -27,7 +27,7 @@ export const useAuthStore = create((set) => ({
         return;
       }
 
-      // Buscar en tu tabla usuarios
+      // Buscar en tabla usuarios
       const { data: usuarioBD } = await supabase
         .from("usuarios")
         .select("id, rol")

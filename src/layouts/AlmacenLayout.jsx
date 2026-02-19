@@ -372,7 +372,6 @@ export function AlmacenLayout() {
 
   useEffect(() => {
     verificarSesion();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function verificarSesion() {

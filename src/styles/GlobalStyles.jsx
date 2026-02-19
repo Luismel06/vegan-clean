@@ -66,7 +66,6 @@ export const GlobalStyles = createGlobalStyle`
     --brand-green: #16a34a;
   }
 
-  /*  Animación reutilizable (por ejemplo, para loaders) */
   .spin {
     animation: spin 1s linear infinite;
   }

@@ -1,7 +1,7 @@
 // 📁 supabase/crudSolicitudes.jsx
 import { supabase } from "./supabase.config";
 
-// 🔹 Insertar una nueva solicitud
+//  Insertar una nueva solicitud
 export const insertarSolicitud = async (solicitud) => {
   const { data, error } = await supabase.from("solicitudes").insert([solicitud]);
   if (error) {
@@ -11,7 +11,7 @@ export const insertarSolicitud = async (solicitud) => {
   return data;
 };
 
-// 🔹 Obtener todas las solicitudes
+//  Obtener todas las solicitudes
 export const obtenerSolicitudes = async () => {
   const { data, error } = await supabase
     .from("solicitudes")

@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   XCircle,
   Hourglass,
+  CreditCard,
+  BadgeDollarSign,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -297,6 +299,19 @@ const DangerBtn = styled(BtnBase)`
   }
 `;
 
+const TinyActionBtn = styled(BtnBase)`
+  padding: 0.45rem 0.65rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  background: ${({ theme }) => theme.cardBackground};
+  border-color: ${({ theme }) => theme.border};
+  color: ${({ theme }) => theme.accent};
+
+  &:hover {
+    border-color: ${({ theme }) => theme.accent};
+  }
+`;
+
 const IconBtn = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ theme }) => theme.cardBackground};
@@ -446,7 +461,9 @@ const EstadoBadge = styled.span`
       ? "rgba(231, 76, 60, 0.14)"
       : estado === "preparacion"
       ? "rgba(52, 152, 219, 0.14)"
-      : "rgba(241, 196, 15, 0.18)"};
+      : estado === "pendiente"
+      ?"rgba(241, 196, 15, 0.18)"
+      : "rgba(46, 204, 113, 0.16)"};
   color: ${({ estado }) =>
     estado === "aceptada"
       ? "#27ae60"
@@ -454,7 +471,9 @@ const EstadoBadge = styled.span`
       ? "#c0392b"
       : estado === "preparacion"
       ? "#2980b9"
-      : "#b7950b"};
+      : estado === "pendiente"
+      ? "#b7950b"
+      : "#27ae60"};
 `;
 
 /* ===================== HELPERS ===================== */
@@ -466,6 +485,12 @@ function safeNumber(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
+function fmtMoney(v) {
+  return `RD$${safeNumber(v, 0).toLocaleString("es-DO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
@@ -474,7 +499,7 @@ function labelCliente(cli) {
   if (cli.tipo_cliente === "empresa") {
     return `${cli.nombre || "-"} (RNC: ${cli.empresa_rnc || "-"})`;
   }
-  return `${cli.nombre || "-"} (Cédula: ${cli.cedula || "-"})`;
+  return `${cli.nombre || "-"} (Cedula: ${cli.cedula || "-"})`;
 }
 async function buscarClientePorDocumento({ tipo, documento }) {
   const doc = onlyDigits(documento);
@@ -510,7 +535,7 @@ function estadoIcon(estado) {
 function estadosCotizacionOpciones() {
   return [
     { value: "pendiente", label: "Pendiente" },
-    { value: "preparacion", label: "Preparación" },
+    { value: "preparacion", label: "Preparacion" },
     { value: "aceptada", label: "Aceptada" },
     { value: "rechazada", label: "Rechazada" },
     { value: "cancelada", label: "Cancelada" },
@@ -528,7 +553,7 @@ export default function Cotizaciones() {
   const [cliente, setCliente] = useState("");
   const [descuento, setDescuento] = useState(0);
 
-  // Catálogos
+  // Catalogos
   const [productos, setProductos] = useState([]);
   const [equipos, setEquipos] = useState([]);
 
@@ -537,6 +562,9 @@ export default function Cotizaciones() {
   const [doc, setDoc] = useState("");
   const [clienteSel, setClienteSel] = useState(null);
   const [clienteLoading, setClienteLoading] = useState(false);
+  const [creditoCliente, setCreditoCliente] = useState(null);
+  const [creditoLoading, setCreditoLoading] = useState(false);
+  const [usarFiado, setUsarFiado] = useState(false);
 
   // Selector tipo + item
   const [tipoItem, setTipoItem] = useState("producto");
@@ -552,6 +580,7 @@ export default function Cotizaciones() {
   // Historial
   const [cotizaciones, setCotizaciones] = useState([]);
   const [historySearch, setHistorySearch] = useState("");
+  const [filtroFiado, setFiltroFiado] = useState("all"); // all | fiadas | pendientes
 
   // Plan 50/50
   const [usaAnticipo, setUsaAnticipo] = useState(false);
@@ -591,6 +620,206 @@ export default function Cotizaciones() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preventaIdFromUrl]);
 
+  useEffect(() => {
+    if (!clienteSel?.id) {
+      setCreditoCliente(null);
+      setUsarFiado(false);
+      return;
+    }
+    cargarEstadoCreditoCliente(clienteSel.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteSel?.id]);
+
+  useEffect(() => {
+    if (!usarFiado) return;
+    if (usaAnticipo) setUsaAnticipo(false);
+  }, [usarFiado, usaAnticipo]);
+
+  useEffect(() => {
+    const syncOnFocus = () => {
+      fetchCotizaciones();
+      if (clienteSel?.id) cargarEstadoCreditoCliente(clienteSel.id);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") syncOnFocus();
+    };
+
+    window.addEventListener("focus", syncOnFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", syncOnFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteSel?.id]);
+
+  function emptyFiadoMeta() {
+    return {
+      es_fiada: false,
+      total_fiado: 0,
+      total_pagado: 0,
+      saldo_pendiente: 0,
+      pagado_directo: 0,
+      pagado_manual_asignado: 0,
+    };
+  }
+
+  function mapCotizacionFiadoMeta(movs = []) {
+    const map = new Map();
+
+    for (const m of movs) {
+      const refId = Number(m?.ref_id);
+      if (!Number.isFinite(refId) || refId <= 0) continue;
+
+      if (!map.has(refId)) map.set(refId, emptyFiadoMeta());
+      const meta = map.get(refId);
+      const monto = safeNumber(m?.monto, 0);
+
+      if (m?.tipo === "fiado") {
+        meta.es_fiada = true;
+        meta.total_fiado += monto;
+      } else if (m?.tipo === "pago") {
+        meta.total_pagado += monto;
+      }
+    }
+
+    for (const meta of map.values()) {
+      meta.total_fiado = Number(meta.total_fiado.toFixed(2));
+      meta.total_pagado = Number(meta.total_pagado.toFixed(2));
+      meta.saldo_pendiente = Number(Math.max(meta.total_fiado - meta.total_pagado, 0).toFixed(2));
+      meta.pagado_directo = Number(meta.total_pagado.toFixed(2));
+    }
+
+    return map;
+  }
+
+  function evaluarElegibilidadFiado(credito, montoFiado) {
+    const reasons = [];
+    const data = credito || {};
+    const monto = safeNumber(montoFiado, 0);
+
+    if (!data.suscrito) reasons.push("El cliente no tiene una suscripcion activa.");
+    if (!data.puede_fiar) reasons.push('El cliente tiene "puede fiar" en No.');
+
+    const maxFios = safeNumber(data.max_fios, 0);
+    const fiadosActivos = safeNumber(data.fiados_activos, 0);
+    const fiosRestantes = safeNumber(data.fios_restantes, Math.max(maxFios - fiadosActivos, 0));
+    if (maxFios > 0 && fiosRestantes <= 0) reasons.push("No tiene cupos de fiado disponibles.");
+
+    const saldo = safeNumber(data.saldo_total, 0);
+    const limite = safeNumber(data.limite_credito, 0);
+    const saldoProyectado = Number((saldo + monto).toFixed(2));
+    if (limite > 0 && saldoProyectado > limite) {
+      reasons.push(`Excede el limite de credito (${fmtMoney(limite)}).`);
+    }
+
+    return {
+      ok: reasons.length === 0,
+      reasons,
+      saldo,
+      limite,
+      fiadosActivos,
+      fiosRestantes,
+      saldoProyectado,
+    };
+  }
+
+  async function obtenerEstadoCreditoCliente(clienteId) {
+    if (!clienteId) return null;
+
+    const empty = {
+      suscrito: false,
+      puede_fiar: false,
+      max_fios: 0,
+      limite_credito: 0,
+      fiados_activos: 0,
+      fios_restantes: 0,
+      saldo_total: 0,
+    };
+
+    const { data: panel, error: errPanel } = await supabase
+      .from("clientes_admin_panel")
+      .select("id, suscrito, puede_fiar, max_fios, limite_credito, fiados_activos, fios_restantes, saldo_total")
+      .eq("id", Number(clienteId))
+      .maybeSingle();
+
+    if (!errPanel && panel) {
+      return {
+        ...empty,
+        suscrito: !!panel.suscrito,
+        puede_fiar: !!panel.puede_fiar,
+        max_fios: safeNumber(panel.max_fios, 0),
+        limite_credito: safeNumber(panel.limite_credito, 0),
+        fiados_activos: safeNumber(panel.fiados_activos, 0),
+        fios_restantes: safeNumber(panel.fios_restantes, 0),
+        saldo_total: safeNumber(panel.saldo_total, 0),
+      };
+    }
+
+    const [{ data: cli, error: errCli }, { data: sub, error: errSub }, { data: movs, error: errMov }] =
+      await Promise.all([
+        supabase.from("clientes").select("id, puede_fiar, max_fios, limite_credito").eq("id", Number(clienteId)).maybeSingle(),
+        supabase
+          .from("clientes_suscripciones")
+          .select("id")
+          .eq("cliente_id", Number(clienteId))
+          .eq("estado", "activa")
+          .is("fin", null),
+        supabase.from("fiados_movimientos").select("tipo, monto, ref_tipo, ref_id").eq("cliente_id", Number(clienteId)),
+      ]);
+
+    if (errCli) throw errCli;
+    if (!cli) return empty;
+    if (errSub) console.warn("No se pudo consultar suscripcion activa:", errSub);
+    if (errMov) console.warn("No se pudieron consultar movimientos de fiado:", errMov);
+
+    let saldoTotal = 0;
+    const byRef = new Map();
+
+    for (const m of movs || []) {
+      const monto = safeNumber(m?.monto, 0);
+      if (m?.tipo === "fiado") saldoTotal += monto;
+      else if (m?.tipo === "pago") saldoTotal -= monto;
+
+      if (m?.ref_id == null) continue;
+      const key = `${m?.ref_tipo || "na"}:${m.ref_id}`;
+      if (!byRef.has(key)) byRef.set(key, { fiado: 0, pago: 0 });
+      const current = byRef.get(key);
+      if (m?.tipo === "fiado") current.fiado += monto;
+      else if (m?.tipo === "pago") current.pago += monto;
+    }
+
+    const fiadosActivos = Array.from(byRef.values()).filter((x) => x.fiado - x.pago > 0).length;
+    const maxFios = safeNumber(cli.max_fios, 0);
+    const fiosRestantes = Math.max(maxFios - fiadosActivos, 0);
+
+    return {
+      suscrito: Array.isArray(sub) ? sub.length > 0 : false,
+      puede_fiar: !!cli.puede_fiar,
+      max_fios: maxFios,
+      limite_credito: safeNumber(cli.limite_credito, 0),
+      fiados_activos: fiadosActivos,
+      fios_restantes: fiosRestantes,
+      saldo_total: Number(Math.max(saldoTotal, 0).toFixed(2)),
+    };
+  }
+
+  async function cargarEstadoCreditoCliente(clienteId) {
+    setCreditoLoading(true);
+    try {
+      const data = await obtenerEstadoCreditoCliente(clienteId);
+      setCreditoCliente(data);
+      return data;
+    } catch (e) {
+      console.error("No se pudo cargar estado de credito:", e);
+      setCreditoCliente(null);
+      return null;
+    } finally {
+      setCreditoLoading(false);
+    }
+  }
+
   async function fetchCatalogos() {
     const [{ data: prods, error: errP }, { data: eqs, error: errE }] = await Promise.all([
       supabase.from("productos").select("*").order("id", { ascending: false }),
@@ -620,8 +849,110 @@ export default function Cotizaciones() {
       )
       .order("id", { ascending: false });
 
-    if (error) console.error(error);
-    setCotizaciones(data || []);
+    if (error) {
+      console.error(error);
+      setCotizaciones([]);
+      return;
+    }
+
+    const base = data || [];
+    const ids = base.map((r) => Number(r.id)).filter((x) => Number.isFinite(x) && x > 0);
+    const clienteIds = Array.from(
+      new Set(base.map((r) => Number(r.cliente_id)).filter((x) => Number.isFinite(x) && x > 0))
+    );
+
+    if (!ids.length || !clienteIds.length) {
+      setCotizaciones(base.map((r) => ({ ...r, fiado_meta: emptyFiadoMeta() })));
+      return;
+    }
+
+    const { data: movs, error: movErr } = await supabase
+      .from("fiados_movimientos")
+      .select("id, cliente_id, tipo, monto, ref_tipo, ref_id, fecha")
+      .in("cliente_id", clienteIds)
+      .order("fecha", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (movErr) {
+      console.error("No se pudo consultar fiados por cotizacion:", movErr);
+      setCotizaciones(base.map((r) => ({ ...r, fiado_meta: emptyFiadoMeta() })));
+      return;
+    }
+
+    const movsCot = (movs || []).filter((m) => m?.ref_tipo === "cotizacion" && ids.includes(Number(m?.ref_id)));
+    const fiadoMap = mapCotizacionFiadoMeta(movsCot);
+
+    const pagosManualPorCliente = new Map();
+    for (const m of movs || []) {
+      const cid = Number(m?.cliente_id);
+      if (!Number.isFinite(cid) || cid <= 0) continue;
+      if (m?.tipo !== "pago" || m?.ref_tipo !== "manual") continue;
+      pagosManualPorCliente.set(cid, safeNumber(pagosManualPorCliente.get(cid), 0) + safeNumber(m?.monto, 0));
+    }
+
+    const asignadoManualPorCot = new Map();
+    const rowsPorCliente = new Map();
+    for (const r of base) {
+      const cid = Number(r?.cliente_id);
+      if (!Number.isFinite(cid) || cid <= 0) continue;
+      if (!rowsPorCliente.has(cid)) rowsPorCliente.set(cid, []);
+      rowsPorCliente.get(cid).push(r);
+    }
+
+    // FIFO de pagos manuales para reflejar abonos desde AdminClientes.
+    for (const [cid, rows] of rowsPorCliente.entries()) {
+      let disponible = safeNumber(pagosManualPorCliente.get(cid), 0);
+      if (disponible <= 0) continue;
+
+      const ordenadas = [...rows].sort((a, b) => {
+        const fa = a?.fecha ? new Date(a.fecha).getTime() : 0;
+        const fb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+        if (fa !== fb) return fa - fb;
+        return safeNumber(a?.id, 0) - safeNumber(b?.id, 0);
+      });
+
+      for (const cot of ordenadas) {
+        if (disponible <= 0) break;
+        const cotId = Number(cot?.id);
+        if (!Number.isFinite(cotId) || cotId <= 0) continue;
+
+        const meta = fiadoMap.get(cotId);
+        if (!meta?.es_fiada) continue;
+
+        const saldoDirecto = Math.max(safeNumber(meta.total_fiado, 0) - safeNumber(meta.total_pagado, 0), 0);
+        if (saldoDirecto <= 0) continue;
+
+        const aplicado = Math.min(saldoDirecto, disponible);
+        if (aplicado > 0) {
+          asignadoManualPorCot.set(cotId, safeNumber(asignadoManualPorCot.get(cotId), 0) + aplicado);
+          disponible -= aplicado;
+        }
+      }
+    }
+
+    const enriched = base.map((r) => {
+      const cotId = Number(r?.id);
+      const meta = fiadoMap.get(cotId) || emptyFiadoMeta();
+      const pagadoManual = safeNumber(asignadoManualPorCot.get(cotId), 0);
+      const totalFiado = safeNumber(meta.total_fiado, 0);
+      const pagadoDirecto = safeNumber(meta.total_pagado, 0);
+      const pagadoTotal = Number((pagadoDirecto + pagadoManual).toFixed(2));
+      const pendiente = Number(Math.max(totalFiado - pagadoTotal, 0).toFixed(2));
+
+      return {
+        ...r,
+        fiado_meta: {
+          es_fiada: totalFiado > 0,
+          total_fiado: Number(totalFiado.toFixed(2)),
+          total_pagado: pagadoTotal,
+          saldo_pendiente: pendiente,
+          pagado_directo: Number(pagadoDirecto.toFixed(2)),
+          pagado_manual_asignado: Number(pagadoManual.toFixed(2)),
+        },
+      };
+    });
+
+    setCotizaciones(enriched);
   }
 
   async function fetchPreventas() {
@@ -777,13 +1108,13 @@ export default function Cotizaciones() {
       }
     } catch (e) {
       console.error("preloadDesdePreventa:", e);
-      Swal.fire("Error", "No se pudo precargar la preventa en la cotización.", "error");
+      Swal.fire("Error", "No se pudo precargar la preventa en la cotizacion.", "error");
     } finally {
       setLoadingPreventa(false);
     }
   }
 
-  /* ===================== filtros catálogo ===================== */
+  /* ===================== filtros catalogo ===================== */
   const categoriasProductos = useMemo(
     () => Array.from(new Set((productos || []).map((p) => p.categoria || "Otros"))),
     [productos]
@@ -848,7 +1179,7 @@ export default function Cotizaciones() {
 
     const cant = safeNumber(cantidad, 1);
     if (!cant || cant <= 0) {
-      Swal.fire("Cantidad inválida", "Debe ser mayor que cero.", "warning");
+      Swal.fire("Cantidad invalida", "Debe ser mayor que cero.", "warning");
       return;
     }
 
@@ -863,7 +1194,7 @@ export default function Cotizaciones() {
     const precioUnitario = precioBase + extra;
 
     if (precioUnitario <= 0) {
-      Swal.fire("Precio inválido", "El precio unitario debe ser mayor que cero.", "warning");
+      Swal.fire("Precio invalido", "El precio unitario debe ser mayor que cero.", "warning");
       return;
     }
 
@@ -910,7 +1241,7 @@ export default function Cotizaciones() {
     e.preventDefault();
 
     if (!clienteSel?.id) {
-      Swal.fire("Falta cliente", "Busca y selecciona un cliente por Cédula/RNC antes de guardar.", "warning");
+      Swal.fire("Falta cliente", "Busca y selecciona un cliente por Cedula/RNC antes de guardar.", "warning");
       return;
     }
 
@@ -938,16 +1269,41 @@ export default function Cotizaciones() {
     })();
 
     if (total <= 0) {
-      Swal.fire("Total inválido", "El total debe ser mayor que cero.", "error");
+      Swal.fire("Total invalido", "El total debe ser mayor que cero.", "error");
       return;
     }
 
     let montoAnticipo = 0;
     let montoPendiente = 0;
+    const fiadoSolicitado = !!usarFiado;
+    const anticipoSolicitado = !!usaAnticipo && !fiadoSolicitado;
 
-    if (usaAnticipo) {
+    if (anticipoSolicitado) {
       montoAnticipo = Number((total * 0.5).toFixed(2));
       montoPendiente = Number((total - montoAnticipo).toFixed(2));
+    }
+
+    const montoFiado = fiadoSolicitado ? Number(total.toFixed(2)) : anticipoSolicitado ? montoPendiente : 0;
+    const requiereCredito = montoFiado > 0;
+
+    if (requiereCredito) {
+      let creditoActual = null;
+      try {
+        creditoActual = await obtenerEstadoCreditoCliente(clienteSel.id);
+      } catch (e) {
+        console.error(e);
+        Swal.fire("Error", "No se pudo validar el estado de credito del cliente.", "error");
+        return;
+      }
+
+      const checkFiado = evaluarElegibilidadFiado(creditoActual, montoFiado);
+      setCreditoCliente(creditoActual);
+
+      if (!checkFiado.ok) {
+        Swal.fire("Fiado no permitido", checkFiado.reasons.join("<br/>"), "warning");
+        setUsarFiado(false);
+        return;
+      }
     }
 
     const payloadCot = {
@@ -957,9 +1313,9 @@ export default function Cotizaciones() {
       descuento: safeNumber(descuento, 0),
       fecha: new Date().toISOString(),
       estado: "pendiente",
-      usa_anticipo: usaAnticipo,
+      usa_anticipo: anticipoSolicitado,
       monto_anticipo: montoAnticipo,
-      monto_pendiente: montoPendiente,
+      monto_pendiente: montoFiado,
       preventa_id: preventaSeleccionada ? Number(preventaSeleccionada) : null,
       inventario_descontado: false,
     };
@@ -968,7 +1324,7 @@ export default function Cotizaciones() {
 
     if (error || !cot) {
       console.error(error);
-      Swal.fire("Error", "No se pudo guardar la cotización", "error");
+      Swal.fire("Error", "No se pudo guardar la cotizacion", "error");
       return;
     }
 
@@ -993,7 +1349,39 @@ export default function Cotizaciones() {
       const { error: errDet } = await supabase.from("detalle_cotizacion").insert([payload]);
       if (errDet) {
         console.error(errDet);
-        Swal.fire("Error", "No se pudo guardar el detalle de la cotización.", "error");
+        Swal.fire("Error", "No se pudo guardar el detalle de la cotizacion.", "error");
+        return;
+      }
+    }
+
+    if (requiereCredito) {
+      const { data: auth } = await supabase.auth.getUser();
+      const creado_por = auth?.user?.id || null;
+
+      const { error: errFiado } = await supabase.from("fiados_movimientos").insert({
+        cliente_id: clienteSel.id,
+        monto: montoFiado,
+        tipo: "fiado",
+        ref_tipo: "cotizacion",
+        ref_id: cot.id,
+        nota: fiadoSolicitado
+          ? "Fiado total creado desde cotizaciones"
+          : "Fiado pendiente del plan 50/50 creado desde cotizaciones",
+        creado_por,
+      });
+
+      if (errFiado) {
+        console.error(errFiado);
+
+        await supabase.from("detalle_cotizacion").delete().eq("cotizacion_id", cot.id);
+        await supabase.from("cotizaciones").delete().eq("id", cot.id);
+
+        const msg = String(errFiado?.message || "").toLowerCase();
+        if (msg.includes("fiados_unico_fiado_por_ref")) {
+          Swal.fire("Error", "Ya existe un fiado para esta cotizacion.", "error");
+        } else {
+          Swal.fire("Error", "No se pudo registrar el fiado de la cotizacion.", "error");
+        }
         return;
       }
     }
@@ -1005,7 +1393,15 @@ export default function Cotizaciones() {
         .eq("id", Number(preventaSeleccionada));
     }
 
-    Swal.fire("Éxito", "Cotización guardada correctamente", "success");
+    Swal.fire(
+      "Exito",
+      fiadoSolicitado
+        ? "Cotizacion guardada y marcada como fiada."
+        : anticipoSolicitado
+        ? "Cotizacion guardada con plan 50/50 y pendiente registrado como fiado."
+        : "Cotizacion guardada correctamente",
+      "success"
+    );
 
     setCliente("");
     setDoc("");
@@ -1016,6 +1412,8 @@ export default function Cotizaciones() {
     setItemSeleccionado("");
     setCantidad(1);
     setExtraUnitario(0);
+    setCreditoCliente(null);
+    setUsarFiado(false);
     setUsaAnticipo(false);
     setCategoriaProducto("");
     setMarcaProducto("");
@@ -1030,36 +1428,106 @@ export default function Cotizaciones() {
 
   async function eliminarCotizacion(id) {
     const result = await Swal.fire({
-      title: "¿Eliminar cotización?",
-      text: "Esta acción no se puede deshacer.",
+      title: "Eliminar cotizacion?",
+      text: "Esta accion no se puede deshacer.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Sí, eliminar",
+      confirmButtonText: "Si, eliminar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#e53935",
     });
     if (!result.isConfirmed) return;
 
+    await supabase.from("fiados_movimientos").delete().eq("ref_tipo", "cotizacion").eq("ref_id", id);
     await supabase.from("detalle_cotizacion").delete().eq("cotizacion_id", id);
     await supabase.from("cotizaciones").delete().eq("id", id);
 
     setCotizaciones((prev) => prev.filter((c) => c.id !== id));
-    Swal.fire("Eliminada", "La cotización ha sido eliminada.", "success");
+    Swal.fire("Eliminada", "La cotizacion ha sido eliminada.", "success");
   }
 
-  // ======== CAMBIO DE ESTADO COTIZACIÓN + SINCRONIZACIÓN PREVENTA ========
+  async function registrarAbonoFiado(cot) {
+    const cotId = Number(cot?.id);
+    const clienteId = Number(cot?.cliente_id);
+    const meta = cot?.fiado_meta || emptyFiadoMeta();
+    const saldoPendiente = safeNumber(meta?.saldo_pendiente, 0);
+
+    if (!Number.isFinite(cotId) || cotId <= 0 || !Number.isFinite(clienteId) || clienteId <= 0) {
+      Swal.fire("Error", "No se pudo identificar la cotizacion o el cliente.", "error");
+      return;
+    }
+
+    if (saldoPendiente <= 0) {
+      Swal.fire("Sin saldo", "Esta cotizacion no tiene saldo fiado pendiente.", "info");
+      return;
+    }
+
+    const { value, isConfirmed } = await Swal.fire({
+      title: `Abonar fiado de cotizacion #${cotId}`,
+      text: `Saldo pendiente: ${fmtMoney(saldoPendiente)}`,
+      input: "number",
+      inputLabel: "Monto a abonar (RD$)",
+      inputAttributes: { min: 0.01, step: "0.01", max: saldoPendiente },
+      showCancelButton: true,
+      confirmButtonText: "Registrar abono",
+      cancelButtonText: "Cancelar",
+      preConfirm: (raw) => {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n <= 0) {
+          Swal.showValidationMessage("Debes indicar un monto valido.");
+          return null;
+        }
+        if (n > saldoPendiente) {
+          Swal.showValidationMessage(`El abono no puede superar ${fmtMoney(saldoPendiente)}.`);
+          return null;
+        }
+        return Number(n.toFixed(2));
+      },
+    });
+
+    if (!isConfirmed || !value) return;
+
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const creado_por = auth?.user?.id || null;
+
+      const { error: errPago } = await supabase.from("fiados_movimientos").insert({
+        cliente_id: clienteId,
+        monto: Number(value),
+        tipo: "pago",
+        ref_tipo: "cotizacion",
+        ref_id: cotId,
+        nota: "Abono registrado desde cotizaciones",
+        creado_por,
+      });
+
+      if (errPago) throw errPago;
+
+      const nuevoPendiente = Number(Math.max(safeNumber(cot?.monto_pendiente, 0) - Number(value), 0).toFixed(2));
+      await supabase.from("cotizaciones").update({ monto_pendiente: nuevoPendiente }).eq("id", cotId);
+
+      Swal.fire("Listo", "Abono registrado correctamente.", "success");
+      await fetchCotizaciones();
+      if (clienteSel?.id === clienteId) await cargarEstadoCreditoCliente(clienteId);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", e?.message || "No se pudo registrar el abono.", "error");
+    }
+  }
+
+  // ======== CAMBIO DE ESTADO COTIZACION + SINCRONIZACION PREVENTA ========
   async function cambiarEstadoCotizacion(cot, nuevoEstado) {
     const actual = String(cot?.estado || "pendiente");
     if (nuevoEstado === actual) return;
 
     const res = await Swal.fire({
       icon: "question",
-      title: "Cambiar estado de cotización",
-      html: `Cotización <strong>#${cot.id}</strong><br/>De <strong>${formatearEstado(actual)}</strong> a <strong>${formatearEstado(
+      title: "Cambiar estado de cotizacion",
+      html: `Cotizacion <strong>#${cot.id}</strong><br/>De <strong>${formatearEstado(actual)}</strong> a <strong>${formatearEstado(
         nuevoEstado
       )}</strong>`,
       showCancelButton: true,
-      confirmButtonText: "Sí, cambiar",
+      confirmButtonText: "Si, cambiar",
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#16a34a",
     });
@@ -1068,17 +1536,17 @@ export default function Cotizaciones() {
     const { error: errUpdate } = await supabase.from("cotizaciones").update({ estado: nuevoEstado }).eq("id", cot.id);
     if (errUpdate) {
       console.error(errUpdate);
-      Swal.fire("Error", "No se pudo actualizar el estado de la cotización.", "error");
+      Swal.fire("Error", "No se pudo actualizar el estado de la cotizacion.", "error");
       return;
     }
 
-    // Si está vinculada a una preventa, sincronizamos el estado del ticket:
+    // Si esta vinculada a una preventa, sincronizamos el estado del ticket:
     const pid = cot.preventa_id || cot?.preventa_ref?.id || null;
     if (pid) {
       // Reglas:
       // aceptada => preventa cerrada
       // rechazada/cancelada => preventa cancelada
-      // pendiente/preparacion => preventa cotizada (si no está cerrada/cancelada)
+      // pendiente/preparacion => preventa cotizada (si no esta cerrada/cancelada)
       let nuevoEstadoPreventa = null;
 
       if (nuevoEstado === "aceptada") nuevoEstadoPreventa = "cerrada";
@@ -1089,7 +1557,7 @@ export default function Cotizaciones() {
         // Actualizamos preventa solo si existe
         const { data: prev, error: prevErr } = await supabase.from("preventas").select("id, estado").eq("id", pid).maybeSingle();
         if (!prevErr && prev?.id) {
-          // Si ya está cerrada/cancelada y el nuevo estado sugerido es "cotizada", no la bajamos.
+          // Si ya esta cerrada/cancelada y el nuevo estado sugerido es "cotizada", no la bajamos.
           if (
             (prev.estado === "cerrada" || prev.estado === "cancelada") &&
             nuevoEstadoPreventa === "cotizada"
@@ -1111,20 +1579,86 @@ export default function Cotizaciones() {
   const totalActual = calcularTotalConDescuento();
   const anticipoActual = usaAnticipo ? Number((totalActual * 0.5).toFixed(2)) : 0;
   const pendienteActual = usaAnticipo ? Number((totalActual - anticipoActual).toFixed(2)) : 0;
+  const mitadActual = Number((totalActual * 0.5).toFixed(2));
+
+  const checkFiadoTotal = useMemo(() => {
+    if (!clienteSel?.id) return { ok: false, reasons: ["Selecciona un cliente."] };
+    if (totalActual <= 0) return { ok: false, reasons: ["Agrega items para calcular el total."] };
+    return evaluarElegibilidadFiado(creditoCliente, totalActual);
+  }, [clienteSel?.id, creditoCliente, totalActual]);
+
+  const checkFiadoMitad = useMemo(() => {
+    if (!clienteSel?.id) return { ok: false, reasons: ["Selecciona un cliente."] };
+    if (mitadActual <= 0) return { ok: false, reasons: ["Agrega items para calcular el total."] };
+    return evaluarElegibilidadFiado(creditoCliente, mitadActual);
+  }, [clienteSel?.id, creditoCliente, mitadActual]);
+
+  const resumenFiados = useMemo(() => {
+    const rows = cotizaciones || [];
+    let totalFiado = 0;
+    let totalPendiente = 0;
+    let totalPagado = 0;
+    let fiadas = 0;
+    let pendientes = 0;
+
+    for (const c of rows) {
+      const meta = c?.fiado_meta || emptyFiadoMeta();
+      const fiado = safeNumber(meta.total_fiado, 0);
+      const pagado = safeNumber(meta.total_pagado, 0);
+      const pendiente = safeNumber(meta.saldo_pendiente, 0);
+      if (fiado > 0) fiadas += 1;
+      if (pendiente > 0) pendientes += 1;
+      totalFiado += fiado;
+      totalPagado += pagado;
+      totalPendiente += pendiente;
+    }
+
+    return {
+      fiadas,
+      pendientes,
+      totalFiado: Number(totalFiado.toFixed(2)),
+      totalPagado: Number(totalPagado.toFixed(2)),
+      totalPendiente: Number(totalPendiente.toFixed(2)),
+    };
+  }, [cotizaciones]);
+
+  const fiadosPendientes = useMemo(() => {
+    return (cotizaciones || [])
+      .filter((c) => safeNumber(c?.fiado_meta?.saldo_pendiente, 0) > 0)
+      .sort((a, b) => safeNumber(b?.fiado_meta?.saldo_pendiente, 0) - safeNumber(a?.fiado_meta?.saldo_pendiente, 0));
+  }, [cotizaciones]);
 
   const historyFiltered = useMemo(() => {
     const q = String(historySearch || "").trim().toLowerCase();
-    if (!q) return cotizaciones || [];
-    return (cotizaciones || []).filter((c) => {
+    const rows = (cotizaciones || []).filter((c) => {
+      if (filtroFiado === "fiadas" && !safeNumber(c?.fiado_meta?.total_fiado, 0)) return false;
+      if (filtroFiado === "pendientes" && !(safeNumber(c?.fiado_meta?.saldo_pendiente, 0) > 0)) return false;
+      return true;
+    });
+
+    if (!q) return rows;
+    return rows.filter((c) => {
       const cli = c.cliente_ref || null;
       const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
       const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "";
-      const hay = [c.id, c.preventa_id, caso, c.total, c.estado, c.fecha, clienteLabel]
+      const meta = c?.fiado_meta || emptyFiadoMeta();
+      const hay = [
+        c.id,
+        c.preventa_id,
+        caso,
+        c.total,
+        c.estado,
+        c.fecha,
+        clienteLabel,
+        meta.total_fiado,
+        meta.total_pagado,
+        meta.saldo_pendiente,
+      ]
         .map((x) => String(x ?? "").toLowerCase())
         .join(" | ");
       return hay.includes(q);
     });
-  }, [cotizaciones, historySearch]);
+  }, [cotizaciones, historySearch, filtroFiado]);
 
   return (
     <Wrapper>
@@ -1136,8 +1670,8 @@ export default function Cotizaciones() {
               Cotizaciones
             </h2>
             <p>
-              Estados de cotización: <strong>pendiente</strong>, <strong>preparacion</strong>, <strong>aceptada</strong>,{" "}
-              <strong>rechazada</strong>, <strong>cancelada</strong>. Si una cotización vinculada se marca como{" "}
+              Estados de cotizacion: <strong>pendiente</strong>, <strong>preparacion</strong>, <strong>aceptada</strong>,{" "}
+              <strong>rechazada</strong>, <strong>cancelada</strong>. Si una cotizacion vinculada se marca como{" "}
               <strong>rechazada</strong>, el ticket (preventa) se sincroniza a <strong>cancelada</strong>.
             </p>
           </HeaderLeft>
@@ -1156,14 +1690,14 @@ export default function Cotizaciones() {
         <FormCard>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
-              <div style={{ fontWeight: 950, color: "inherit" }}>Nueva cotización</div>
+              <div style={{ fontWeight: 950, color: "inherit" }}>Nueva cotizacion</div>
               <Muted>Primero selecciona cliente; luego agrega items (productos/equipos).</Muted>
             </div>
 
             {preventaIdFromUrl ? (
               <Pill>
                 <Clock3 size={14} />
-                Preload: <strong>#{preventaIdFromUrl}</strong> {loadingPreventa ? "· cargando..." : "· listo"}
+                Preload: <strong>#{preventaIdFromUrl}</strong> {loadingPreventa ? "- cargando..." : "- listo"}
               </Pill>
             ) : null}
           </div>
@@ -1185,7 +1719,7 @@ export default function Cotizaciones() {
                   setDoc("");
                 }}
               >
-                <option value="persona">Persona (Cédula)</option>
+                <option value="persona">Persona (Cedula)</option>
                 <option value="empresa">Empresa (RNC)</option>
               </Select>
             </Field>
@@ -1198,7 +1732,7 @@ export default function Cotizaciones() {
               <Input
                 value={doc}
                 onChange={(e) => setDoc(e.target.value)}
-                placeholder={tipoCliente === "persona" ? "Cédula" : "RNC"}
+                placeholder={tipoCliente === "persona" ? "Cedula" : "RNC"}
               />
             </Field>
 
@@ -1209,7 +1743,7 @@ export default function Cotizaciones() {
                 </PrimaryBtn>
 
                 <Muted>
-                  <strong>Seleccionado:</strong> {clienteSel ? labelCliente(clienteSel) : "—"}
+                  <strong>Seleccionado:</strong> {clienteSel ? labelCliente(clienteSel) : "-"}
                 </Muted>
               </Row>
 
@@ -1221,8 +1755,20 @@ export default function Cotizaciones() {
                       Perfil cliente
                     </div>
                     <div style={{ fontSize: 13, opacity: 0.85 }}>
-                      Recurrente: <strong>{clienteSel.es_recurrente ? "Sí" : "No"}</strong> · Puede fiar:{" "}
-                      <strong>{clienteSel.puede_fiar ? "Sí" : "No"}</strong>
+                      Recurrente: <strong>{clienteSel.es_recurrente ? "Si" : "No"}</strong> - Puede fiar:{" "}
+                      <strong>{clienteSel.puede_fiar ? "Si" : "No"}</strong> - Suscrito:{" "}
+                      <strong>{creditoCliente?.suscrito ? "Si" : "No"}</strong>
+                    </div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>
+                      {creditoLoading ? (
+                        "Cargando estado de credito..."
+                      ) : (
+                        <>
+                          Fios activos: <strong>{safeNumber(creditoCliente?.fiados_activos, 0)}</strong> - Restantes:{" "}
+                          <strong>{safeNumber(creditoCliente?.fios_restantes, 0)}</strong> - Saldo:{" "}
+                          <strong>{fmtMoney(creditoCliente?.saldo_total)}</strong>
+                        </>
+                      )}
                     </div>
                   </MiniStack>
 
@@ -1257,7 +1803,7 @@ export default function Cotizaciones() {
                 <option value="">Sin preventa</option>
                 {preventas.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {`#${p.id} — ${p.numero_caso || "SIN CASO"} — ${p.cliente || "-"} — ${p.estado || "-"}`}
+                    {`#${p.id} - ${p.numero_caso || "SIN CASO"} - ${p.cliente || "-"} - ${p.estado || "-"}`}
                   </option>
                 ))}
               </Select>
@@ -1268,7 +1814,7 @@ export default function Cotizaciones() {
                 <ShieldCheck size={14} />
                 Estado ticket (preventa)
               </Label>
-              <Input value={preventaCargada ? (preventaCargada.estado || "-") : "—"} readOnly placeholder="—" />
+              <Input value={preventaCargada ? (preventaCargada.estado || "-") : "-"} readOnly placeholder="-" />
             </Field>
           </Split>
 
@@ -1312,7 +1858,7 @@ export default function Cotizaciones() {
             {tipoItem === "producto" ? (
               <>
                 <Field>
-                  <Label>Categoría (productos)</Label>
+                  <Label>Categoria (productos)</Label>
                   <Select
                     value={categoriaProducto}
                     onChange={(e) => {
@@ -1355,7 +1901,7 @@ export default function Cotizaciones() {
                     {productosFiltrados.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.nombre}
-                        {p.modelo ? ` - ${p.modelo}` : ""} — RD${safeNumber(p.precio, 0)}
+                        {p.modelo ? ` - ${p.modelo}` : ""} - RD${safeNumber(p.precio, 0)}
                       </option>
                     ))}
                   </Select>
@@ -1364,7 +1910,7 @@ export default function Cotizaciones() {
             ) : (
               <>
                 <Field>
-                  <Label>Categoría (equipos)</Label>
+                  <Label>Categoria (equipos)</Label>
                   <Select
                     value={categoriaEquipo}
                     onChange={(e) => {
@@ -1407,7 +1953,7 @@ export default function Cotizaciones() {
                     {equiposFiltrados.map((eq) => (
                       <option key={eq.id} value={eq.id}>
                         {eq.nombre}
-                        {eq.modelo ? ` - ${eq.modelo}` : ""} — RD${safeNumber(eq.precio, 0)}
+                        {eq.modelo ? ` - ${eq.modelo}` : ""} - RD${safeNumber(eq.precio, 0)}
                       </option>
                     ))}
                   </Select>
@@ -1500,7 +2046,7 @@ export default function Cotizaciones() {
                         <MobileTitle>
                           <strong>{d.nombre}</strong>
                           <span>
-                            {d.tipo} {d.modelo ? `· ${d.modelo}` : ""}
+                            {d.tipo} {d.modelo ? ` - ${d.modelo}` : ""}
                           </span>
                         </MobileTitle>
 
@@ -1544,29 +2090,130 @@ export default function Cotizaciones() {
             <Full>
               <InfoBanner>
                 <MiniStack>
-                  <div style={{ fontWeight: 950 }}>Pago 50% / 50%</div>
+                  <div style={{ fontWeight: 950 }}>Modalidad de cobro</div>
                   <div style={{ fontSize: 13, opacity: 0.85 }}>
-                    Si se activa, el cliente verá anticipo y pendiente con 50/50.
+                    Fiado solo para clientes suscritos y habilitados. El 50/50 registra el restante como fiado.
                   </div>
                 </MiniStack>
 
-                <label style={{ display: "inline-flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
-                  <input type="checkbox" checked={usaAnticipo} onChange={(e) => setUsaAnticipo(e.target.checked)} />
-                  <span style={{ fontWeight: 850 }}>Permitir plan 50/50</span>
-                </label>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <label style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={usarFiado}
+                      disabled={totalActual <= 0 || !clienteSel?.id}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        if (!checked) {
+                          setUsarFiado(false);
+                          return;
+                        }
+                        if (!clienteSel?.id) {
+                          Swal.fire("Falta cliente", "Selecciona un cliente antes de usar fiado.", "warning");
+                          return;
+                        }
+                        let creditoActual = creditoCliente;
+                        if (!creditoActual) {
+                          try {
+                            creditoActual = await obtenerEstadoCreditoCliente(clienteSel.id);
+                            setCreditoCliente(creditoActual);
+                          } catch (err) {
+                            console.error(err);
+                            Swal.fire("Error", "No se pudo validar el estado de credito.", "error");
+                            return;
+                          }
+                        }
+                        const check = evaluarElegibilidadFiado(creditoActual, totalActual);
+                        if (!check.ok) {
+                          Swal.fire("Fiado no permitido", check.reasons.join("<br/>"), "warning");
+                          return;
+                        }
+                        setUsarFiado(true);
+                        setUsaAnticipo(false);
+                      }}
+                    />
+                    <span style={{ fontWeight: 850 }}>Fiado total</span>
+                  </label>
+
+                  <label style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: usarFiado ? "not-allowed" : "pointer", opacity: usarFiado ? 0.6 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={usaAnticipo}
+                      disabled={usarFiado || totalActual <= 0 || !clienteSel?.id}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        if (!checked) {
+                          setUsaAnticipo(false);
+                          return;
+                        }
+                        if (!clienteSel?.id) {
+                          Swal.fire("Falta cliente", "Selecciona un cliente antes de activar el 50/50.", "warning");
+                          return;
+                        }
+                        let creditoActual = creditoCliente;
+                        if (!creditoActual) {
+                          try {
+                            creditoActual = await obtenerEstadoCreditoCliente(clienteSel.id);
+                            setCreditoCliente(creditoActual);
+                          } catch (err) {
+                            console.error(err);
+                            Swal.fire("Error", "No se pudo validar el estado de credito.", "error");
+                            return;
+                          }
+                        }
+                        const check = evaluarElegibilidadFiado(creditoActual, mitadActual);
+                        if (!check.ok) {
+                          Swal.fire(
+                            "50/50 no permitido",
+                            `El 50% pendiente se registra como fiado (${fmtMoney(mitadActual)}).<br/><br/>${check.reasons.join("<br/>")}`,
+                            "warning"
+                          );
+                          return;
+                        }
+                        setUsaAnticipo(true);
+                        setUsarFiado(false);
+                      }}
+                    />
+                    <span style={{ fontWeight: 850 }}>Plan 50/50</span>
+                  </label>
+                </div>
               </InfoBanner>
 
-              {usaAnticipo ? (
-                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Badge>Anticipo: <strong>RD${anticipoActual.toFixed(2)}</strong></Badge>
-                  <Badge>Pendiente: <strong>RD${pendienteActual.toFixed(2)}</strong></Badge>
-                </div>
+              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {usarFiado ? (
+                  <>
+                    <Badge>
+                      <CreditCard size={14} /> Fiado: <strong>{fmtMoney(totalActual)}</strong>
+                    </Badge>
+                    <Badge>
+                      <BadgeDollarSign size={14} /> Pago inicial: <strong>{fmtMoney(0)}</strong>
+                    </Badge>
+                  </>
+                ) : usaAnticipo ? (
+                  <>
+                    <Badge>Anticipo: <strong>{fmtMoney(anticipoActual)}</strong></Badge>
+                    <Badge>Pendiente (fiado): <strong>{fmtMoney(pendienteActual)}</strong></Badge>
+                  </>
+                ) : (
+                  <Badge>Pago completo al momento: <strong>{fmtMoney(totalActual)}</strong></Badge>
+                )}
+              </div>
+
+              {!usarFiado && clienteSel?.id && totalActual > 0 && !checkFiadoTotal.ok ? (
+                <Muted style={{ marginTop: 8 }}>
+                  Fiado total no disponible: {checkFiadoTotal.reasons.join(" ")}
+                </Muted>
+              ) : null}
+              {!usarFiado && !usaAnticipo && clienteSel?.id && totalActual > 0 && !checkFiadoMitad.ok ? (
+                <Muted style={{ marginTop: 8 }}>
+                  50/50 no disponible: {checkFiadoMitad.reasons.join(" ")}
+                </Muted>
               ) : null}
             </Full>
 
             <Full>
               <PrimaryBtn type="button" onClick={guardarCotizacion} disabled={loadingPreventa}>
-                <FileText size={16} /> Guardar cotización
+                <FileText size={16} /> Guardar cotizacion
               </PrimaryBtn>
             </Full>
           </Split>
@@ -1584,10 +2231,24 @@ export default function Cotizaciones() {
         >
           <div style={{ display: "grid", gap: 4 }}>
             <div style={{ fontWeight: 950 }}>Historial</div>
-            <Muted>Busca por cliente, ID, estado, #caso o #preventa.</Muted>
+            <Muted>Busca por cliente, ID, estado, #caso, #preventa o montos de fiado.</Muted>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+              <Badge>
+                Fiadas: <strong>{resumenFiados.fiadas}</strong>
+              </Badge>
+              <Badge>
+                Pendientes: <strong>{resumenFiados.pendientes}</strong>
+              </Badge>
+              <Badge>
+                Total fiado: <strong>{fmtMoney(resumenFiados.totalFiado)}</strong>
+              </Badge>
+              <Badge>
+                Total pendiente: <strong>{fmtMoney(resumenFiados.totalPendiente)}</strong>
+              </Badge>
+            </div>
           </div>
 
-          <div style={{ minWidth: 280, flex: 1, maxWidth: 520 }}>
+          <div style={{ minWidth: 280, flex: 1, maxWidth: 760, display: "grid", gap: 8 }}>
             <Field style={{ padding: "0.7rem 0.85rem", borderRadius: 999 }}>
               <Label style={{ marginBottom: 6 }}>
                 <Search size={14} />
@@ -1599,8 +2260,54 @@ export default function Cotizaciones() {
                 placeholder="Ej: #12, pendiente, rechazado, caso..."
               />
             </Field>
+            <Field style={{ padding: "0.55rem 0.75rem", borderRadius: 999 }}>
+              <Label style={{ marginBottom: 4 }}>Filtro de fiado</Label>
+              <Select value={filtroFiado} onChange={(e) => setFiltroFiado(e.target.value)} style={{ marginTop: 0 }}>
+                <option value="all">Todas las cotizaciones</option>
+                <option value="fiadas">Solo cotizaciones fiadas</option>
+                <option value="pendientes">Solo fiadas pendientes</option>
+              </Select>
+            </Field>
           </div>
         </div>
+
+        {fiadosPendientes.length ? (
+          <Card style={{ marginTop: 12, padding: "0.9rem 1rem" }}>
+            <div style={{ fontWeight: 950, marginBottom: 8 }}>Cotizaciones fiadas pendientes</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {fiadosPendientes.slice(0, 6).map((c) => {
+                const cli = c.cliente_ref || null;
+                const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
+                const saldo = safeNumber(c?.fiado_meta?.saldo_pendiente, 0);
+                return (
+                  <div
+                    key={`fiado-pend-${c.id}`}
+                    style={{
+                      border: "1px solid rgba(148, 163, 184, 0.4)",
+                      borderRadius: 14,
+                      padding: "0.65rem 0.75rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: 2 }}>
+                      <div style={{ fontWeight: 900 }}>#{c.id} - {clienteLabel}</div>
+                      <div style={{ fontSize: 13, opacity: 0.8 }}>
+                        Pendiente: <strong>{fmtMoney(saldo)}</strong>
+                      </div>
+                    </div>
+                    <TinyActionBtn type="button" onClick={() => registrarAbonoFiado(c)}>
+                      <BadgeDollarSign size={14} /> Abonar
+                    </TinyActionBtn>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        ) : null}
 
         {/* Desktop table */}
         <DesktopOnly>
@@ -1616,6 +2323,7 @@ export default function Cotizaciones() {
                   <th>Estado</th>
 
                   <th>Anticipo</th>
+                  <th>Fiado</th>
                   <th>Fecha</th>
                   <th>Acciones</th>
                 </tr>
@@ -1625,6 +2333,10 @@ export default function Cotizaciones() {
                   const cli = c.cliente_ref || null;
                   const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
                   const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "-";
+                  const fiadoMeta = c?.fiado_meta || emptyFiadoMeta();
+                  const fiadoTotal = safeNumber(fiadoMeta.total_fiado, 0);
+                  const fiadoPagado = safeNumber(fiadoMeta.total_pagado, 0);
+                  const fiadoPendiente = safeNumber(fiadoMeta.saldo_pendiente, 0);
 
                   return (
                     <tr key={c.id}>
@@ -1647,10 +2359,27 @@ export default function Cotizaciones() {
                         {c.usa_anticipo ? (
                           <div style={{ display: "grid", gap: 2 }}>
                             <span>
-                              Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong>
+                              Inicial: <strong>{fmtMoney(c.monto_anticipo)}</strong>
                             </span>
                             <span>
-                              Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong>
+                              Restante: <strong>{fmtMoney(fiadoTotal > 0 ? fiadoPendiente : c.monto_pendiente)}</strong>
+                            </span>
+                          </div>
+                        ) : (
+                          "No"
+                        )}
+                      </td>
+                      <td>
+                        {fiadoTotal > 0 ? (
+                          <div style={{ display: "grid", gap: 2 }}>
+                            <span>
+                              Fiado: <strong>{fmtMoney(fiadoTotal)}</strong>
+                            </span>
+                            <span>
+                              Pagado: <strong>{fmtMoney(fiadoPagado)}</strong>
+                            </span>
+                            <span>
+                              Pendiente: <strong>{fmtMoney(fiadoPendiente)}</strong>
                             </span>
                           </div>
                         ) : (
@@ -1663,6 +2392,11 @@ export default function Cotizaciones() {
                           <IconBtn type="button" onClick={() => navigate(`/admin/cotizaciones/${c.id}`)} title="Ver">
                             <Eye size={16} />
                           </IconBtn>
+                          {fiadoPendiente > 0 ? (
+                            <TinyActionBtn type="button" onClick={() => registrarAbonoFiado(c)} title="Registrar abono">
+                              <BadgeDollarSign size={14} /> Abonar
+                            </TinyActionBtn>
+                          ) : null}
                           <DangerBtn type="button" onClick={() => eliminarCotizacion(c.id)} title="Eliminar">
                             <Trash2 size={16} /> Eliminar
                           </DangerBtn>
@@ -1682,6 +2416,10 @@ export default function Cotizaciones() {
             const cli = c.cliente_ref || null;
             const clienteLabel = cli ? labelCliente(cli) : c.cliente || "-";
             const caso = c?.preventa_ref?.numero_caso || c?.numero_caso || "-";
+            const fiadoMeta = c?.fiado_meta || emptyFiadoMeta();
+            const fiadoTotal = safeNumber(fiadoMeta.total_fiado, 0);
+            const fiadoPagado = safeNumber(fiadoMeta.total_pagado, 0);
+            const fiadoPendiente = safeNumber(fiadoMeta.saldo_pendiente, 0);
 
             return (
               <MobileCard key={c.id}>
@@ -1689,7 +2427,7 @@ export default function Cotizaciones() {
                   <MobileTitle>
                     <strong>#{c.id}</strong>
                     <span>
-                      {clienteLabel} · Caso: {caso}
+                      {clienteLabel} - Caso: {caso}
                     </span>
                   </MobileTitle>
 
@@ -1715,6 +2453,13 @@ export default function Cotizaciones() {
                       Preventa: <strong>#{c.preventa_id}</strong>
                     </Pill>
                   ) : null}
+                  {fiadoTotal > 0 ? (
+                    <>
+                      <Pill>Fiado: <strong>{fmtMoney(fiadoTotal)}</strong></Pill>
+                      <Pill>Pagado: <strong>{fmtMoney(fiadoPagado)}</strong></Pill>
+                      <Pill>Pendiente: <strong>{fmtMoney(fiadoPendiente)}</strong></Pill>
+                    </>
+                  ) : null}
                 </MobileMeta>
 
                 <div>
@@ -1734,15 +2479,23 @@ export default function Cotizaciones() {
                 {c.usa_anticipo ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Badge>
-                      Inicial: <strong>RD${safeNumber(c.monto_anticipo, 0)}</strong>
+                      Inicial: <strong>{fmtMoney(c.monto_anticipo)}</strong>
                     </Badge>
                     <Badge>
-                      Restante: <strong>RD${safeNumber(c.monto_pendiente, 0)}</strong>
+                      Restante: <strong>{fmtMoney(fiadoTotal > 0 ? fiadoPendiente : c.monto_pendiente)}</strong>
                     </Badge>
                   </div>
                 ) : (
                   <Muted>Anticipo: No</Muted>
                 )}
+
+                {fiadoPendiente > 0 ? (
+                  <div>
+                    <TinyActionBtn type="button" onClick={() => registrarAbonoFiado(c)}>
+                      <BadgeDollarSign size={14} /> Abonar fiado
+                    </TinyActionBtn>
+                  </div>
+                ) : null}
               </MobileCard>
             );
           })}
@@ -1760,3 +2513,4 @@ export default function Cotizaciones() {
     </Wrapper>
   );
 }
+

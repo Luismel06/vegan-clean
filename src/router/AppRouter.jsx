@@ -7,7 +7,7 @@ import RouteGuard from "../components/RouteGuard";
 import { ClienteLayout } from "../layouts/ClienteLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
 import { VendedorLayout } from "../layouts/VendedorLayout";
-import { AlmacenLayout } from "../layouts/AlmacenLayout"; // <-- IMPORTANTE (créalo si no existe)
+import { AlmacenLayout } from "../layouts/AlmacenLayout";
 
 // --- Páginas del cliente ---
 import Inicio from "../pages/cliente/Inicio";
@@ -27,6 +27,7 @@ import PublicacionesAdmin from "../pages/admin/Publicaciones";
 import Cotizaciones from "../pages/admin/Cotizaciones";
 import VistaCotizacion from "../pages/admin/VistaCotizacion";
 import AdminClientes from "../pages/admin/AdminClientes.jsx";
+import ClienteDetalle from "../pages/admin/ClienteDetalle.jsx";
 import Finanzas from "../pages/admin/Finanzas.jsx";
 
 // --- Páginas Vendedor ---
@@ -74,7 +75,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <ClienteLayout />,
     children: [
-      { index: true, element: <Inicio /> }, // mejor que { path:"/" }
+      { index: true, element: <Inicio /> },
       { path: "servicios", element: <Servicios /> },
       { path: "publicaciones", element: <Publicaciones /> },
       { path: "contacto", element: <Contacto /> },
@@ -95,6 +96,7 @@ const router = createBrowserRouter([
       { path: "finanzas", element: <Finanzas /> },
       { path: "usuarios", element: <Usuarios /> },
       { path: "clientes", element: <AdminClientes /> },
+      { path: "clientes/:id", element: <ClienteDetalle /> },
       { path: "productos", element: <Productos /> },
       { path: "equipos", element: <Equipos /> },
       { path: "tickets", element: <Tickets /> },

@@ -1,7 +1,7 @@
 // src/supabase/crudUsuarios.js
 import { supabase } from "./supabase.config";
 
-// 🧩 Insertar un nuevo usuario
+//  Insertar un nuevo usuario
 export const insertarUsuario = async (nuevoUsuario) => {
   try {
     const { data, error } = await supabase
@@ -17,7 +17,7 @@ export const insertarUsuario = async (nuevoUsuario) => {
   }
 };
 
-// 📋 Mostrar todos los usuarios
+//  Mostrar todos los usuarios
 export const mostrarUsuarios = async () => {
   try {
     const { data, error } = await supabase
@@ -33,7 +33,7 @@ export const mostrarUsuarios = async () => {
   }
 };
 
-// ✏️ Actualizar un usuario existente
+//  Actualizar un usuario existente
 export const actualizarUsuario = async (id, camposActualizados) => {
   try {
     const { data, error } = await supabase
@@ -50,7 +50,7 @@ export const actualizarUsuario = async (id, camposActualizados) => {
   }
 };
 
-// 🗑️ Eliminar un usuario
+//  Eliminar un usuario
 export const eliminarUsuario = async (id) => {
   try {
     const { error } = await supabase.from("usuarios").delete().eq("id", id);
@@ -62,7 +62,7 @@ export const eliminarUsuario = async (id) => {
   }
 };
 
-// 🔍 Buscar usuario por correo (útil para login o asignación)
+//  Buscar usuario por correo (útil para login o asignación)
 export const buscarUsuarioPorCorreo = async (email) => {
   try {
     const { data, error } = await supabase

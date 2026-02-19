@@ -3,7 +3,7 @@ import { supabase } from "./supabase.config";
 // Crear cotización + items
 export async function crearCotizacion({ cliente, numero_caso, descuento, total, items }) {
 
-  // 1️⃣ Insertar cotización principal
+  // Insertar cotización principal
   const { data: cotizacion, error: errorCot } = await supabase
     .from("cotizaciones")
     .insert([
@@ -23,7 +23,7 @@ export async function crearCotizacion({ cliente, numero_caso, descuento, total, 
     throw new Error("Error al crear cotización.");
   }
 
-  // 2️⃣ Insertar items asociados
+  // Insertar items asociados
   const itemsPreparados = items.map((item) => ({
     cotizacion_id: cotizacion.id,
     producto_id: item.id,

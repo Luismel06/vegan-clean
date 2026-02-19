@@ -268,7 +268,7 @@ const Body = styled.div`
   overflow-x: hidden;
 
   @media (max-width: 900px) {
-    padding-bottom: 78px; /* espacio para bottom nav */
+    padding-bottom: 78px;
   }
 `;
 
@@ -364,7 +364,7 @@ export function VendedorLayout() {
 
   useEffect(() => {
     verificarSesion();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   async function verificarSesion() {
