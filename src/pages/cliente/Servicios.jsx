@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
-import emailjs from "emailjs-com";
 import { supabase } from "../../supabase/supabase.config";
 import { AREAS_CLIENTE, isAreaClienteValida, normalizeAreaCliente } from "../../shared/areasCliente.js";
 
@@ -182,7 +181,7 @@ const Tabs = styled.div`
 const TabButton = styled.button`
   border: 1px solid ${({ theme }) => theme.border};
   background: ${({ $active, theme }) => ($active ? theme.accent : theme.cardBackground)};
-  color: ${({ $active }) => ($active ? "#06130a" : "inherit")};
+  color: ${({ $active }) => ($active ? "#06130a" : "black")};
   border-radius: 999px;
   padding: 0.8rem 1.1rem;
   font-weight: 900;
@@ -990,6 +989,62 @@ export default function Servicios() {
       .join("\n");
   }, [carritoItems]);
 
+  async function enviarCorreoOrdenRecibidaResend({
+    tipoClienteLocal,
+    cliente,
+    email,
+    telefono,
+    area,
+    cedula,
+    empresaNombre,
+    empresaRnc,
+    nota,
+    numeroCaso,
+    preventaId,
+    items,
+  }) {
+    const trackingUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin.replace(/\/+$/g, "")}/servicios`
+        : "";
+
+    const payload = {
+      tipo_cliente: tipoClienteLocal,
+      cliente_nombre: cliente,
+      email,
+      telefono,
+      direccion: area,
+      cedula: cedula || "",
+      empresa_nombre: empresaNombre || "",
+      empresa_rnc: empresaRnc || "",
+      nota: nota || "",
+      numero_caso: numeroCaso,
+      preventa_id: String(preventaId),
+      tracking_url: trackingUrl,
+      fecha: new Date().toISOString(),
+      items: (items || []).map((it) => ({
+        tipo: it.tipo || "producto",
+        nombre: it.nombre,
+        qty: Number(it.qty || 1),
+        modelo: it.modelo || "",
+      })),
+    };
+
+    const { data, error } = await supabase.functions.invoke("send-fiance-emails", {
+      body: {
+        mode: "direct_send",
+        event_type: "orden_recibida",
+        to_email: email,
+        payload,
+      },
+    });
+
+    if (error) throw error;
+    if (data?.ok === false) {
+      throw new Error(data?.error || "No se pudo enviar correo con Resend.");
+    }
+  }
+
   // ========= AUTOCOMPLETAR CLIENTE =========
   async function autocompletarPorDocumento(formEl) {
     if (!formEl) return;
@@ -1258,27 +1313,22 @@ export default function Servicios() {
       }
 
       try {
-        await emailjs.send(
-          "service_kfvhwxq",
-          "template_iy48pw3",
-          {
-            tipo_cliente: tipoCliente,
-            cliente,
-            email,
-            telefono,
-            direccion: area,
-            cedula: cedula || "",
-            empresa_nombre: empresa_nombreRaw || "",
-            empresa_rnc: empresa_rnc || "",
-            items: itemsTexto,
-            nota: nota || "",
-            numero_caso,
-            preventa_id: String(p.id),
-          },
-          "yoOeYAk8XPOIvEhbf"
-        );
+        await enviarCorreoOrdenRecibidaResend({
+          tipoClienteLocal: tipoCliente,
+          cliente,
+          email,
+          telefono,
+          area,
+          cedula: cedula || "",
+          empresaNombre: empresa_nombreRaw || "",
+          empresaRnc: empresa_rnc || "",
+          nota: nota || "",
+          numeroCaso: numero_caso,
+          preventaId: p.id,
+          items: carritoItems,
+        });
       } catch (mailErr) {
-        console.warn("⚠️ Preventa creada, pero email falló:", mailErr);
+        console.warn("⚠️ Preventa creada, pero correo Resend falló:", mailErr);
       }
 
       try {

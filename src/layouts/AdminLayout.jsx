@@ -18,6 +18,7 @@ import {
   CheckCheck,
   X,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabase/supabase.config.jsx";
@@ -370,7 +371,7 @@ const NotifList = styled.div`
   display: grid;
 `;
 
-const NotifItem = styled.button`
+const NotifItem = styled.div`
   width: 100%;
   border: none;
   border-bottom: 1px solid ${({ theme }) => theme.border};
@@ -393,6 +394,31 @@ const NotifItemTitle = styled.div`
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+`;
+
+const NotifItemRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const NotifDeleteBtn = styled.button`
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  color: ${({ theme }) => theme.text};
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0.84;
+
+  &:hover {
+    opacity: 1;
+    color: #ef4444;
+    border-color: #ef4444;
+  }
 `;
 
 const NotifItemText = styled.div`
@@ -571,6 +597,7 @@ const LOW_STOCK_LIMIT = 5;
 const RPC_SYNC_NOTIF_STOCK = "admin_sync_notificaciones_stock";
 const RPC_GET_NOTIF_USER = "admin_get_notificaciones_usuario";
 const RPC_MARK_NOTIF_READ_USER = "admin_mark_notificaciones_read_for_user";
+const RPC_DELETE_NOTIF = "admin_delete_notificacion";
 const RPC_CLEANUP_NOTIF = "admin_cleanup_notificaciones";
 const NOTIF_KEEP_DAYS = 30;
 const TOAST_RECENT_MS = 5 * 60 * 1000;
@@ -681,6 +708,21 @@ export function AdminLayout() {
     const unreadIds = notifications.filter((n) => !n.leida).map((n) => Number(n.id));
     if (!unreadIds.length) return;
     await markNotificationsRead(unreadIds);
+  }
+
+  async function deleteNotification(id) {
+    const notifId = Number(id);
+    if (!Number.isFinite(notifId)) return;
+
+    const { data, error } = await supabase.rpc(RPC_DELETE_NOTIF, { p_id: notifId });
+    if (error) throw error;
+    if (data === false) throw new Error("No se pudo eliminar la notificacion.");
+
+    setNotifications((prev) => prev.filter((n) => Number(n.id) !== notifId));
+    setToastItems((prev) => prev.filter((t) => Number(t?.notif?.id) !== notifId));
+    announcedToastKeysRef.current = new Set(
+      Array.from(announcedToastKeysRef.current).filter((k) => !k.startsWith(`${notifId}:`))
+    );
   }
 
   async function fetchAdminNotifications() {
@@ -934,7 +976,25 @@ export function AdminLayout() {
                           >
                             <NotifItemTitle>
                               <span>{n.title}</span>
-                              <span style={{ fontSize: 12, opacity: 0.78 }}>{n.moduloLabel}</span>
+                              <NotifItemRight>
+                                <span style={{ fontSize: 12, opacity: 0.78 }}>{n.moduloLabel}</span>
+                                <NotifDeleteBtn
+                                  type="button"
+                                  title="Eliminar notificacion"
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    try {
+                                      await deleteNotification(n.id);
+                                    } catch (err) {
+                                      console.error("No se pudo eliminar notificacion:", err);
+                                      Swal.fire("Error", err?.message || "No se pudo eliminar la notificacion.", "error");
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={13} />
+                                </NotifDeleteBtn>
+                              </NotifItemRight>
                             </NotifItemTitle>
                             <NotifItemText>{n.mensaje}</NotifItemText>
                             <NotifItemMeta>
