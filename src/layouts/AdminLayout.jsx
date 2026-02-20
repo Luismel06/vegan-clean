@@ -331,6 +331,16 @@ const NotifPanel = styled.div`
   border: 1px solid ${({ theme }) => theme.border};
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
   z-index: 2100;
+
+  @media (max-width: 900px) {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
+    width: auto;
+    max-height: calc(100dvh - 84px);
+    border-radius: 16px;
+  }
 `;
 
 const NotifHeader = styled.div`
@@ -343,6 +353,11 @@ const NotifHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 900px) {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
 `;
 
 const NotifTitle = styled.div`
@@ -364,6 +379,11 @@ const NotifAction = styled.button`
 
   &:hover {
     opacity: 0.9;
+  }
+
+  @media (max-width: 900px) {
+    width: 100%;
+    justify-content: center;
   }
 `;
 
@@ -394,12 +414,20 @@ const NotifItemTitle = styled.div`
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+
+  > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `;
 
 const NotifItemRight = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 `;
 
 const NotifDeleteBtn = styled.button`
