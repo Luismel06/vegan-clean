@@ -566,6 +566,9 @@ function isValidRNC(input) {
 }
 
 async function getMyUid() {
+  const scope = await getVendedorScope();
+  if (scope?.authUid) return scope.authUid;
+
   const { data, error } = await supabase.auth.getUser();
   if (!error && data?.user?.id) return data.user.id;
   return localStorage.getItem("user_id") || null;

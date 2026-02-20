@@ -57,11 +57,6 @@ const Table = styled.table`
   }
 `;
 
-function formatRD(v) {
-  const n = Number(v || 0);
-  return `RD$ ${n.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function safeText(v) {
   return String(v ?? "").trim();
 }
@@ -74,6 +69,38 @@ async function getVendedorId() {
   // Fallback si guardas algo en localStorage
   const ls = localStorage.getItem("user_id");
   return ls || null;
+}
+
+async function getVendedorMatchIds() {
+  const ids = new Set();
+  const authId = await getVendedorId();
+  if (authId) ids.add(String(authId));
+
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const email = auth?.user?.email || null;
+    if (email) {
+      const { data: perfil, error } = await supabase
+        .from("usuarios")
+        .select("auth_uid")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (!error && perfil?.auth_uid) {
+        ids.add(String(perfil.auth_uid));
+      }
+    }
+  } catch {
+    // no-op
+  }
+
+  return Array.from(ids);
+}
+
+function byVendedorIds(query, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return query;
+  if (ids.length === 1) return query.eq("vendedor_id", ids[0]);
+  return query.in("vendedor_id", ids);
 }
 
 export default function VendedorHistorial() {
@@ -91,10 +118,11 @@ export default function VendedorHistorial() {
     try {
       setLoading(true);
 
-      const vid = await getVendedorId();
+      const matchIds = await getVendedorMatchIds();
+      const vid = matchIds[0] || null;
       setVendedorId(vid);
 
-      if (!vid) {
+      if (!matchIds.length) {
         setPreventas([]);
         setCotizaciones([]);
         Swal.fire("Sesión", "No se detectó el vendedor (user_id). Inicia sesión nuevamente.", "warning");
@@ -102,12 +130,15 @@ export default function VendedorHistorial() {
       }
 
       // 1) Preventas SOLO del vendedor
-      const { data: prev, error: e1 } = await supabase
-        .from("preventas")
-        .select("id, numero_caso, estado, creado_en, cliente, cliente_id, vendedor_id")
-        .eq("vendedor_id", vid)
-        .order("creado_en", { ascending: false })
-        .limit(30);
+      const prevQuery = byVendedorIds(
+        supabase
+          .from("preventas")
+          .select("id, numero_caso, estado, creado_en, cliente, cliente_id, vendedor_id")
+          .order("creado_en", { ascending: false })
+          .limit(30),
+        matchIds
+      );
+      const { data: prev, error: e1 } = await prevQuery;
 
       if (e1) throw e1;
 
@@ -117,12 +148,15 @@ export default function VendedorHistorial() {
       let cot = [];
 
       if (hasCotVendedorId) {
-        const { data: cotData, error: e2 } = await supabase
-          .from("cotizaciones")
-          .select("id, estado, fecha, total, preventa_id, cliente_id, numero_caso, vendedor_id")
-          .eq("vendedor_id", vid)
-          .order("fecha", { ascending: false })
-          .limit(30);
+        const cotQuery = byVendedorIds(
+          supabase
+            .from("cotizaciones")
+            .select("id, estado, fecha, total, preventa_id, cliente_id, numero_caso, vendedor_id")
+            .order("fecha", { ascending: false })
+            .limit(30),
+          matchIds
+        );
+        const { data: cotData, error: e2 } = await cotQuery;
 
         if (e2) throw e2;
         cot = cotData || [];

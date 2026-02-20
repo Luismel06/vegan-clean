@@ -485,6 +485,31 @@ function safeNumber(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
+const ITBIS_RATE = 0.18;
+
+function calcularTotalesCotizacion(items = [], descuentoPct = 0) {
+  const subtotalRaw = (items || []).reduce((acc, it) => {
+    const cant = safeNumber(it?.cantidad, 0);
+    const unit = safeNumber(it?.precioUnitario, 0);
+    return acc + unit * cant;
+  }, 0);
+  const descuento = safeNumber(descuentoPct, 0);
+  const descuentoMontoRaw = (subtotalRaw * descuento) / 100;
+  const netoRaw = subtotalRaw - descuentoMontoRaw;
+  const itbisRaw = netoRaw * ITBIS_RATE;
+  const totalRaw = netoRaw + itbisRaw;
+  const round2 = (n) => Number(safeNumber(n, 0).toFixed(2));
+
+  return {
+    subtotal: round2(subtotalRaw),
+    descuentoPct: round2(descuento),
+    descuentoMonto: round2(descuentoMontoRaw),
+    neto: round2(netoRaw),
+    itbis: round2(itbisRaw),
+    total: round2(totalRaw),
+  };
+}
+
 function fmtMoney(v) {
   return `RD$${safeNumber(v, 0).toLocaleString("es-DO", {
     minimumFractionDigits: 2,
@@ -1221,21 +1246,6 @@ export default function Cotizaciones() {
     setDetalle((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function calcularSubtotalDetalle() {
-    return detalle.reduce((acc, it) => {
-      const cant = safeNumber(it.cantidad, 0);
-      const unit = safeNumber(it.precioUnitario, 0);
-      return acc + unit * cant;
-    }, 0);
-  }
-
-  function calcularTotalConDescuento() {
-    const base = calcularSubtotalDetalle();
-    const desc = safeNumber(descuento, 0);
-    const total = base - (base * desc) / 100;
-    return Number.isFinite(total) ? total : 0;
-  }
-
   /* ===================== GUARDAR ===================== */
   async function guardarCotizacion(e) {
     e.preventDefault();
@@ -1258,15 +1268,8 @@ export default function Cotizaciones() {
       return { ...it, extra, precioUnitario: unit, cantidad: cant };
     });
 
-    const total = (() => {
-      const base = detalleSeguro.reduce(
-        (acc, it) => acc + safeNumber(it.precioUnitario, 0) * safeNumber(it.cantidad, 0),
-        0
-      );
-      const desc = safeNumber(descuento, 0);
-      const t = base - (base * desc) / 100;
-      return Number.isFinite(t) ? t : 0;
-    })();
+    const resumenGuardar = calcularTotalesCotizacion(detalleSeguro, descuento);
+    const total = safeNumber(resumenGuardar.total, 0);
 
     if (total <= 0) {
       Swal.fire("Total invalido", "El total debe ser mayor que cero.", "error");
@@ -1576,7 +1579,11 @@ export default function Cotizaciones() {
     fetchPreventas();
   }
 
-  const totalActual = calcularTotalConDescuento();
+  const resumenActual = useMemo(() => calcularTotalesCotizacion(detalle, descuento), [detalle, descuento]);
+  const subtotalActual = resumenActual.subtotal;
+  const descuentoMontoActual = resumenActual.descuentoMonto;
+  const itbisActual = resumenActual.itbis;
+  const totalActual = resumenActual.total;
   const anticipoActual = usaAnticipo ? Number((totalActual * 0.5).toFixed(2)) : 0;
   const pendienteActual = usaAnticipo ? Number((totalActual - anticipoActual).toFixed(2)) : 0;
   const mitadActual = Number((totalActual * 0.5).toFixed(2));
@@ -2083,9 +2090,17 @@ export default function Cotizaciones() {
             </Field>
 
             <Field>
-              <Label>Total estimado</Label>
+              <Label>Total estimado (incluye ITBIS 18%)</Label>
               <Input value={`RD$ ${totalActual.toFixed(2)}`} readOnly />
             </Field>
+
+            <Full>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Badge>Subtotal: <strong>{fmtMoney(subtotalActual)}</strong></Badge>
+                <Badge>Descuento: <strong>-{fmtMoney(descuentoMontoActual)}</strong></Badge>
+                <Badge>ITBIS (18%): <strong>{fmtMoney(itbisActual)}</strong></Badge>
+              </div>
+            </Full>
 
             <Full>
               <InfoBanner>

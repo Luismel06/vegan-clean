@@ -1,8 +1,9 @@
 // src/pages/admin/Productos.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
+import StockScannerModal from "../../components/admin/StockScannerModal.jsx";
 import {
   Plus,
   Pencil,
@@ -16,6 +17,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Image as ImageIcon,
+  ScanLine,
+  Bell,
 } from "lucide-react";
 
 /* ==================== ESTILOS ==================== */
@@ -298,6 +301,41 @@ const ImgPreview = styled.img`
   background: ${({ theme }) => theme.background};
 `;
 
+const StockNotice = styled.div`
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid ${({ theme }) => theme.border};
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  background: ${({ theme }) => theme.cardBackground};
+`;
+
+const StockNoticeTitle = styled.div`
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+`;
+
+const StockNoticeList = styled.div`
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+`;
+
+const StockChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  font-size: 0.82rem;
+  font-weight: 700;
+`;
+
 /* ==================== HELPERS ==================== */
 function getPublicImageUrl(bucket, path) {
   if (!path) return "";
@@ -324,6 +362,8 @@ async function uploadImageToBucket(bucket, file) {
   if (error) throw error;
   return filePath;
 }
+
+const LOW_STOCK_LIMIT = 5;
 
 /* ==================== COMPONENTE ==================== */
 export default function Productos() {
@@ -352,6 +392,8 @@ export default function Productos() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePath, setImagePath] = useState("");
   const [imagePreview, setImagePreview] = useState("");
+  const lowStockAlertShown = useRef(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -406,10 +448,29 @@ export default function Productos() {
   const valorInventario = productos.reduce((acc, p) => acc + (p.cantidad || 0) * (p.precio || 0), 0);
   const productoMasCaro = productos.reduce((max, p) => (p.precio > (max?.precio || 0) ? p : max), null);
   const productoMenorStock = productos.reduce((min, p) => (p.cantidad < (min?.cantidad || Infinity) ? p : min), null);
+  const productosBajoStock = useMemo(() => {
+    return (productos || [])
+      .filter((p) => Number(p?.cantidad || 0) <= LOW_STOCK_LIMIT)
+      .sort((a, b) => Number(a?.cantidad || 0) - Number(b?.cantidad || 0));
+  }, [productos]);
 
   useEffect(() => {
     fetchProductos();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (lowStockAlertShown.current) return;
+    if (!productosBajoStock.length) return;
+
+    lowStockAlertShown.current = true;
+    Swal.fire({
+      icon: "warning",
+      title: "Alerta de inventario",
+      text: `Hay ${productosBajoStock.length} ${productosBajoStock.length === 1 ? "producto" : "productos"} con menos de ${LOW_STOCK_LIMIT} unidades en stock.`,
+      confirmButtonColor: "#00c27a",
+    });
+  }, [loading, productosBajoStock]);
 
   async function fetchProductos() {
     try {
@@ -559,17 +620,73 @@ export default function Productos() {
     }
   }
 
+  async function aplicarScannerReposicion(rows = []) {
+    if (!rows.length) return;
+
+    const ids = rows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
+    if (!ids.length) return;
+
+    try {
+      const { data: freshRows, error: errFresh } = await supabase
+        .from("productos")
+        .select("id, cantidad")
+        .in("id", ids);
+
+      if (errFresh) throw errFresh;
+
+      const qtyById = new Map(
+        (freshRows || []).map((row) => [Number(row.id), Number(row.cantidad || 0)])
+      );
+
+      for (const row of rows) {
+        const id = Number(row.id);
+        const addQty = Number(row.addQty || 0);
+        if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(addQty) || addQty <= 0) continue;
+
+        const baseQty = qtyById.get(id);
+        if (!Number.isFinite(baseQty)) {
+          throw new Error(`No se encontro el producto #${id} para actualizar inventario.`);
+        }
+
+        const nextQty = baseQty + addQty;
+        const { error: errUpdate } = await supabase
+          .from("productos")
+          .update({ cantidad: nextQty })
+          .eq("id", id);
+
+        if (errUpdate) throw errUpdate;
+        qtyById.set(id, nextQty);
+      }
+
+      await fetchProductos();
+
+      const totalUnits = rows.reduce((acc, row) => acc + Number(row.addQty || 0), 0);
+      Swal.fire(
+        "Inventario actualizado",
+        `Se agregaron ${totalUnits} ${totalUnits === 1 ? "unidad" : "unidades"} en ${rows.length} ${rows.length === 1 ? "producto" : "productos"}.`,
+        "success"
+      );
+    } catch (e) {
+      console.error("aplicarScannerReposicion error:", e);
+      throw new Error(e?.message || "No se pudo aplicar el lote de escaneo.");
+    }
+  }
+
   return (
     <Wrapper>
       <Header>
         <Title>Productos</Title>
         <Actions>
-          <SecondaryButton onClick={fetchProductos}>
+          <SecondaryButton type="button" onClick={fetchProductos}>
             <RefreshCw size={18} /> Recargar
           </SecondaryButton>
 
+          <SecondaryButton type="button" onClick={() => setScannerOpen(true)}>
+            <ScanLine size={18} /> Escaner +stock
+          </SecondaryButton>
+
           {!adding && editingId === null && (
-            <Button onClick={() => setAdding(true)}>
+            <Button type="button" onClick={() => setAdding(true)}>
               <Plus size={18} /> Nuevo producto
             </Button>
           )}
@@ -582,6 +699,14 @@ export default function Productos() {
           <MetricInfo>
             <MetricValue>{totalProductos}</MetricValue>
             <MetricLabel>Total de productos</MetricLabel>
+          </MetricInfo>
+        </MetricCard>
+
+        <MetricCard>
+          <IconWrap><Bell size={22} /></IconWrap>
+          <MetricInfo>
+            <MetricValue>{productosBajoStock.length}</MetricValue>
+            <MetricLabel>{`Stock bajo (<= ${LOW_STOCK_LIMIT})`}</MetricLabel>
           </MetricInfo>
         </MetricCard>
 
@@ -617,6 +742,22 @@ export default function Productos() {
           </MetricCard>
         )}
       </MetricsGrid>
+
+      {productosBajoStock.length > 0 && (
+        <StockNotice>
+          <StockNoticeTitle>
+            <AlertTriangle size={16} />
+            Notificaciones de inventario: hay {productosBajoStock.length} productos en nivel bajo.
+          </StockNoticeTitle>
+          <StockNoticeList>
+            {productosBajoStock.slice(0, 12).map((p) => (
+              <StockChip key={`stock-bajo-prod-${p.id}`}>
+                {p.nombre || "Producto"}: {Number(p.cantidad || 0)}
+              </StockChip>
+            ))}
+          </StockNoticeList>
+        </StockNotice>
+      )}
 
       <FiltersRow>
         <SearchBox style={{ marginBottom: 0, minWidth: "unset" }}>
@@ -826,6 +967,20 @@ export default function Productos() {
           </Table>
         )}
       </TableWrapper>
+
+      <StockScannerModal
+        open={scannerOpen}
+        title="Escaner + stock (Productos)"
+        entityLabel="producto"
+        items={(productos || []).map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          codigo_barra: p.codigo_barra,
+          cantidad: p.cantidad,
+        }))}
+        onClose={() => setScannerOpen(false)}
+        onApply={aplicarScannerReposicion}
+      />
     </Wrapper>
   );
 }

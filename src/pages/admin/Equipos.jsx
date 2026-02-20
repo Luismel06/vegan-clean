@@ -1,8 +1,9 @@
 // src/pages/admin/Equipos.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import Swal from "sweetalert2";
 import { supabase } from "../../supabase/supabase.config.jsx";
+import StockScannerModal from "../../components/admin/StockScannerModal.jsx";
 import {
   Plus,
   Pencil,
@@ -16,6 +17,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Image as ImageIcon,
+  ScanLine,
+  Bell,
 } from "lucide-react";
 
 /* ==================== ESTILOS ==================== */
@@ -300,6 +303,41 @@ const ImgPreview = styled.img`
   background: ${({ theme }) => theme.background};
 `;
 
+const StockNotice = styled.div`
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid ${({ theme }) => theme.border};
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  background: ${({ theme }) => theme.cardBackground};
+`;
+
+const StockNoticeTitle = styled.div`
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+`;
+
+const StockNoticeList = styled.div`
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+`;
+
+const StockChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.border};
+  background: ${({ theme }) => theme.background};
+  font-size: 0.82rem;
+  font-weight: 700;
+`;
+
 /* ==================== HELPERS ==================== */
 function getPublicImageUrl(bucket, path) {
   if (!path) return "";
@@ -326,6 +364,8 @@ async function uploadImageToBucket(bucket, file) {
   if (error) throw error;
   return filePath;
 }
+
+const LOW_STOCK_LIMIT = 5;
 
 /* ==================== COMPONENTE ==================== */
 export default function Equipos() {
@@ -354,6 +394,8 @@ export default function Equipos() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePath, setImagePath] = useState("");
   const [imagePreview, setImagePreview] = useState("");
+  const lowStockAlertShown = useRef(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -408,10 +450,29 @@ export default function Equipos() {
   const valorInventario = equipos.reduce((acc, p) => acc + (p.cantidad || 0) * (p.precio || 0), 0);
   const masCaro = equipos.reduce((max, p) => (p.precio > (max?.precio || 0) ? p : max), null);
   const menorStock = equipos.reduce((min, p) => (p.cantidad < (min?.cantidad || Infinity) ? p : min), null);
+  const equiposBajoStock = useMemo(() => {
+    return (equipos || [])
+      .filter((p) => Number(p?.cantidad || 0) <= LOW_STOCK_LIMIT)
+      .sort((a, b) => Number(a?.cantidad || 0) - Number(b?.cantidad || 0));
+  }, [equipos]);
 
   useEffect(() => {
     fetchEquipos();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (lowStockAlertShown.current) return;
+    if (!equiposBajoStock.length) return;
+
+    lowStockAlertShown.current = true;
+    Swal.fire({
+      icon: "warning",
+      title: "Alerta de inventario",
+      text: `Hay ${equiposBajoStock.length} ${equiposBajoStock.length === 1 ? "equipo" : "equipos"} con menos de ${LOW_STOCK_LIMIT} unidades en stock.`,
+      confirmButtonColor: "#00c27a",
+    });
+  }, [loading, equiposBajoStock]);
 
   async function fetchEquipos() {
     try {
@@ -560,17 +621,73 @@ export default function Equipos() {
     }
   }
 
+  async function aplicarScannerReposicion(rows = []) {
+    if (!rows.length) return;
+
+    const ids = rows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
+    if (!ids.length) return;
+
+    try {
+      const { data: freshRows, error: errFresh } = await supabase
+        .from("equipos")
+        .select("id, cantidad")
+        .in("id", ids);
+
+      if (errFresh) throw errFresh;
+
+      const qtyById = new Map(
+        (freshRows || []).map((row) => [Number(row.id), Number(row.cantidad || 0)])
+      );
+
+      for (const row of rows) {
+        const id = Number(row.id);
+        const addQty = Number(row.addQty || 0);
+        if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(addQty) || addQty <= 0) continue;
+
+        const baseQty = qtyById.get(id);
+        if (!Number.isFinite(baseQty)) {
+          throw new Error(`No se encontro el equipo #${id} para actualizar inventario.`);
+        }
+
+        const nextQty = baseQty + addQty;
+        const { error: errUpdate } = await supabase
+          .from("equipos")
+          .update({ cantidad: nextQty })
+          .eq("id", id);
+
+        if (errUpdate) throw errUpdate;
+        qtyById.set(id, nextQty);
+      }
+
+      await fetchEquipos();
+
+      const totalUnits = rows.reduce((acc, row) => acc + Number(row.addQty || 0), 0);
+      Swal.fire(
+        "Inventario actualizado",
+        `Se agregaron ${totalUnits} ${totalUnits === 1 ? "unidad" : "unidades"} en ${rows.length} ${rows.length === 1 ? "equipo" : "equipos"}.`,
+        "success"
+      );
+    } catch (e) {
+      console.error("aplicarScannerReposicion error:", e);
+      throw new Error(e?.message || "No se pudo aplicar el lote de escaneo.");
+    }
+  }
+
   return (
     <Wrapper>
       <Header>
         <Title>Equipos</Title>
         <Actions>
-          <SecondaryButton onClick={fetchEquipos}>
+          <SecondaryButton type="button" onClick={fetchEquipos}>
             <RefreshCw size={18} /> Recargar
           </SecondaryButton>
 
+          <SecondaryButton type="button" onClick={() => setScannerOpen(true)}>
+            <ScanLine size={18} /> Escaner +stock
+          </SecondaryButton>
+
           {!adding && editingId === null && (
-            <Button onClick={() => setAdding(true)}>
+            <Button type="button" onClick={() => setAdding(true)}>
               <Plus size={18} /> Nuevo equipo
             </Button>
           )}
@@ -583,6 +700,14 @@ export default function Equipos() {
           <MetricInfo>
             <MetricValue>{total}</MetricValue>
             <MetricLabel>Total de equipos</MetricLabel>
+          </MetricInfo>
+        </MetricCard>
+
+        <MetricCard>
+          <IconWrap><Bell size={22} /></IconWrap>
+          <MetricInfo>
+            <MetricValue>{equiposBajoStock.length}</MetricValue>
+            <MetricLabel>{`Stock bajo (<= ${LOW_STOCK_LIMIT})`}</MetricLabel>
           </MetricInfo>
         </MetricCard>
 
@@ -618,6 +743,22 @@ export default function Equipos() {
           </MetricCard>
         )}
       </MetricsGrid>
+
+      {equiposBajoStock.length > 0 && (
+        <StockNotice>
+          <StockNoticeTitle>
+            <AlertTriangle size={16} />
+            Notificaciones de inventario: hay {equiposBajoStock.length} equipos en nivel bajo.
+          </StockNoticeTitle>
+          <StockNoticeList>
+            {equiposBajoStock.slice(0, 12).map((p) => (
+              <StockChip key={`stock-bajo-eq-${p.id}`}>
+                {p.nombre || "Equipo"}: {Number(p.cantidad || 0)}
+              </StockChip>
+            ))}
+          </StockNoticeList>
+        </StockNotice>
+      )}
 
       <FiltersRow>
         <SearchBox style={{ marginBottom: 0, minWidth: "unset" }}>
@@ -827,6 +968,20 @@ export default function Equipos() {
           </Table>
         )}
       </TableWrapper>
+
+      <StockScannerModal
+        open={scannerOpen}
+        title="Escaner + stock (Equipos)"
+        entityLabel="equipo"
+        items={(equipos || []).map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          codigo_barra: p.codigo_barra,
+          cantidad: p.cantidad,
+        }))}
+        onClose={() => setScannerOpen(false)}
+        onApply={aplicarScannerReposicion}
+      />
     </Wrapper>
   );
 }

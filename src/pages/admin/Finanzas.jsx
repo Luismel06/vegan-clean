@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import Swal from "sweetalert2";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import {
   DollarSign,
@@ -662,7 +664,7 @@ function fmtDateTime(v) {
   if (!v) return "—";
   const d = new Date(v);
   if (!Number.isFinite(d.getTime())) return "—";
-  return d.toLocaleString();
+  return d.toLocaleString("es-DO").replace(/[\u00A0\u202F]/g, " ");
 }
 function monthLabel(d) {
   const dt = new Date(d);
@@ -721,11 +723,52 @@ export default function Finanzas() {
   const [movimientos, setMovimientos] = useState([]);
   const [usuariosMap, setUsuariosMap] = useState(new Map());
   const [montoAdeudadoLedger, setMontoAdeudadoLedger] = useState(0);
+  const [resumenFiadoMes, setResumenFiadoMes] = useState({
+    fiado: 0,
+    pagado: 0,
+    pendiente: 0,
+  });
+  const [resumenFlujoMes, setResumenFlujoMes] = useState({
+    fiado_periodo: 0,
+    pagado_periodo: 0,
+  });
+  const [carteraRows, setCarteraRows] = useState([]);
 
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
   const [topMode, setTopMode] = useState("vendidos"); // vendidos | cotizados
   const [topItems, setTopItems] = useState([]);
+
+  const carteraResumen = useMemo(() => {
+    const out = {
+      total: 0,
+      clientes: 0,
+      b0_30: 0,
+      b31_60: 0,
+      b61: 0,
+      bsf: 0,
+    };
+    const uniqClientes = new Set();
+
+    for (const r of carteraRows) {
+      const pend = safeNumber(r.pendiente, 0);
+      out.total += pend;
+      if (r.cliente) uniqClientes.add(String(r.cliente));
+
+      if (r.bucket === "0-30") out.b0_30 += pend;
+      else if (r.bucket === "31-60") out.b31_60 += pend;
+      else if (r.bucket === "61+") out.b61 += pend;
+      else out.bsf += pend;
+    }
+
+    out.total = Number(out.total.toFixed(2));
+    out.b0_30 = Number(out.b0_30.toFixed(2));
+    out.b31_60 = Number(out.b31_60.toFixed(2));
+    out.b61 = Number(out.b61.toFixed(2));
+    out.bsf = Number(out.bsf.toFixed(2));
+    out.clientes = uniqClientes.size;
+    return out;
+  }, [carteraRows]);
 
   const stats = useMemo(() => {
     const estadosVentaReal = ESTADOS.vendido;
@@ -748,6 +791,9 @@ export default function Finanzas() {
       .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
 
     const montoAdeudado = Math.max(safeNumber(montoAdeudadoLedger, 0), 0);
+    const cobrosFiadoMes = Math.max(safeNumber(resumenFlujoMes.pagado_periodo, 0), 0);
+    const fiadoEmitidoMes = Math.max(safeNumber(resumenFlujoMes.fiado_periodo, 0), 0);
+    const coberturaCobranza = fiadoEmitidoMes > 0 ? (cobrosFiadoMes / fiadoEmitidoMes) * 100 : 0;
 
     const ventasCount = cotizaciones.filter((c) => estadosVentaReal.includes((c.estado || "").toLowerCase())).length;
     const ticketProm = ventasCount ? totalVendido / ventasCount : 0;
@@ -766,13 +812,18 @@ export default function Finanzas() {
       porDespachar,
       enPreparacion,
       montoAdeudado,
+      cobrosFiadoMes,
+      fiadoEmitidoMes,
+      coberturaCobranza,
       ticketProm,
       totCotizado,
       ventasCount,
       aceptadasCount,
       conversion,
+      carteraPendiente: carteraResumen.total,
+      carteraClientes: carteraResumen.clientes,
     };
-  }, [cotizaciones, montoAdeudadoLedger]);
+  }, [cotizaciones, montoAdeudadoLedger, resumenFlujoMes, carteraResumen]);
 
   const pieEstados = useMemo(() => {
     const map = new Map();
@@ -900,6 +951,129 @@ export default function Finanzas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mesCursor]);
 
+  async function calcularFiadoPorCotizaciones(cotizacionesRows, options = {}) {
+    const startTs = options?.start ? new Date(options.start).getTime() : null;
+    const endTs = options?.end ? new Date(options.end).getTime() : null;
+    const cotIds = Array.from(
+      new Set(
+        (cotizacionesRows || [])
+          .map((c) => Number(c?.id))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      )
+    );
+
+    if (!cotIds.length) {
+      return {
+        cotIds,
+        byCot: new Map(),
+        totals: { fiado: 0, pagado: 0, pendiente: 0, fiado_periodo: 0, pagado_periodo: 0 },
+        error: null,
+      };
+    }
+
+    const chunks = [];
+    for (let i = 0; i < cotIds.length; i += 200) chunks.push(cotIds.slice(i, i + 200));
+
+    const movimientos = [];
+
+    for (const chunkIds of chunks) {
+      const { data: movFiado, error: movFiadoErr } = await supabase
+        .from("fiados_movimientos")
+        .select("ref_id, tipo, monto, fecha")
+        .eq("ref_tipo", "cotizacion")
+        .in("ref_id", chunkIds);
+
+      if (movFiadoErr) {
+        return {
+          cotIds,
+          byCot: new Map(),
+          totals: { fiado: 0, pagado: 0, pendiente: 0, fiado_periodo: 0, pagado_periodo: 0 },
+          error: movFiadoErr,
+        };
+      }
+
+      if (movFiado?.length) movimientos.push(...movFiado);
+    }
+
+    const byCot = new Map();
+    let totalFiadoMes = 0;
+    let totalPagadoMes = 0;
+    let totalFiadoPeriodo = 0;
+    let totalPagadoPeriodo = 0;
+
+    for (const m of movimientos) {
+      const refId = Number(m?.ref_id);
+      if (!Number.isFinite(refId) || refId <= 0) continue;
+
+      const tipo = String(m?.tipo || "").toLowerCase();
+      const monto = safeNumber(m?.monto, 0);
+      const fecha = m?.fecha || null;
+      const moveTs = fecha ? new Date(fecha).getTime() : null;
+      const inPeriodo =
+        Number.isFinite(startTs) &&
+        Number.isFinite(endTs) &&
+        Number.isFinite(moveTs) &&
+        moveTs >= startTs &&
+        moveTs <= endTs;
+
+      const current = byCot.get(refId) || {
+        fiado: 0,
+        pago: 0,
+        pendiente: 0,
+        first_fiado: null,
+        last_move: null,
+        fiado_periodo: 0,
+        pagado_periodo: 0,
+      };
+      if (tipo === "fiado") {
+        current.fiado += monto;
+        totalFiadoMes += monto;
+        if (inPeriodo) {
+          current.fiado_periodo += monto;
+          totalFiadoPeriodo += monto;
+        }
+        if (fecha && (!current.first_fiado || new Date(fecha).getTime() < new Date(current.first_fiado).getTime())) {
+          current.first_fiado = fecha;
+        }
+      }
+      if (tipo === "pago") {
+        current.pago += monto;
+        totalPagadoMes += monto;
+        if (inPeriodo) {
+          current.pagado_periodo += monto;
+          totalPagadoPeriodo += monto;
+        }
+      }
+
+      if (fecha && (!current.last_move || new Date(fecha).getTime() > new Date(current.last_move).getTime())) {
+        current.last_move = fecha;
+      }
+      byCot.set(refId, current);
+    }
+
+    const totalAdeudadoMes = cotIds.reduce((acc, cotId) => {
+      const meta = byCot.get(cotId);
+      if (!meta) return acc;
+      const pendiente = Math.max(safeNumber(meta.fiado, 0) - safeNumber(meta.pago, 0), 0);
+      meta.pendiente = Number(pendiente.toFixed(2));
+      byCot.set(cotId, meta);
+      return acc + pendiente;
+    }, 0);
+
+    return {
+      cotIds,
+      byCot,
+      totals: {
+        fiado: Number(totalFiadoMes.toFixed(2)),
+        pagado: Number(totalPagadoMes.toFixed(2)),
+        pendiente: Number(totalAdeudadoMes.toFixed(2)),
+        fiado_periodo: Number(totalFiadoPeriodo.toFixed(2)),
+        pagado_periodo: Number(totalPagadoPeriodo.toFixed(2)),
+      },
+      error: null,
+    };
+  }
+
   async function cargarTodo() {
     try {
       setLoading(true);
@@ -911,7 +1085,7 @@ export default function Finanzas() {
       const { data: cot, error: cotErr } = await supabase
         .from("cotizaciones")
         .select(
-          "id, cliente, cliente_id, vendedor_id, preventa_id, total, descuento, fecha, estado, usa_anticipo, monto_anticipo, monto_pendiente, aceptada_en, preparacion_en, rechazada_en, despachado_en"
+          "id, numero_caso, cliente, cliente_id, vendedor_id, preventa_id, total, descuento, fecha, estado, usa_anticipo, monto_anticipo, monto_pendiente, aceptada_en, preparacion_en, rechazada_en, despachado_en"
         )
         .gte("fecha", start.toISOString())
         .lte("fecha", end.toISOString())
@@ -921,12 +1095,10 @@ export default function Finanzas() {
       const cotRows = (cot || []).map((c) => ({ ...c, estado: (c.estado || "pendiente").toLowerCase() }));
       setCotizaciones(cotRows);
 
-      const { data: saldosClientes, error: saldosErr } = await supabase
-        .from("clientes_admin_panel")
-        .select("id, saldo_total");
+      const fiadoMes = await calcularFiadoPorCotizaciones(cotRows, { start, end });
 
-      if (saldosErr) {
-        console.warn("clientes_admin_panel:", saldosErr);
+      if (fiadoMes.error) {
+        console.warn("fiados_movimientos:", fiadoMes.error);
         const fallbackAdeudado = cotRows
           .filter((c) => {
             const st = (c.estado || "").toLowerCase();
@@ -934,13 +1106,79 @@ export default function Finanzas() {
             return mp > 0 && ["aceptada", "preparacion", "despachado"].includes(st);
           })
           .reduce((acc, c) => acc + safeNumber(c.monto_pendiente, 0), 0);
-        setMontoAdeudadoLedger(Number(fallbackAdeudado.toFixed(2)));
+        const pendienteFallback = Number(fallbackAdeudado.toFixed(2));
+        setMontoAdeudadoLedger(pendienteFallback);
+        setResumenFiadoMes({
+          fiado: pendienteFallback,
+          pagado: 0,
+          pendiente: pendienteFallback,
+        });
+        setResumenFlujoMes({
+          fiado_periodo: 0,
+          pagado_periodo: 0,
+        });
+
+        const nowTs = Date.now();
+        const carteraFallback = cotRows
+          .map((c) => {
+            const pendiente = Math.max(safeNumber(c.monto_pendiente, 0), 0);
+            if (pendiente <= 0) return null;
+
+            const baseFecha = c.aceptada_en || c.fecha || null;
+            const baseTs = baseFecha ? new Date(baseFecha).getTime() : null;
+            const dias = Number.isFinite(baseTs) ? Math.max(Math.floor((nowTs - baseTs) / 86400000), 0) : null;
+            const bucket = dias == null ? "sin_fecha" : dias <= 30 ? "0-30" : dias <= 60 ? "31-60" : "61+";
+
+            return {
+              cotizacion_id: c.id,
+              referencia: c.numero_caso || `COT-${c.id}`,
+              cliente: c.cliente || "-",
+              estado: c.estado || "pendiente",
+              pendiente: Number(pendiente.toFixed(2)),
+              dias,
+              bucket,
+              fecha_base: baseFecha,
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.pendiente - a.pendiente);
+        setCarteraRows(carteraFallback);
       } else {
-        const totalAdeudado = (saldosClientes || []).reduce((acc, row) => {
-          const saldo = safeNumber(row?.saldo_total, 0);
-          return acc + (saldo > 0 ? saldo : 0);
-        }, 0);
-        setMontoAdeudadoLedger(Number(totalAdeudado.toFixed(2)));
+        setMontoAdeudadoLedger(fiadoMes.totals.pendiente);
+        setResumenFiadoMes(fiadoMes.totals);
+        const fiadoPeriodo = safeNumber(fiadoMes.totals.fiado_periodo, 0);
+        const pagadoPeriodo = safeNumber(fiadoMes.totals.pagado_periodo, 0);
+        setResumenFlujoMes({
+          fiado_periodo: Number(fiadoPeriodo.toFixed(2)),
+          pagado_periodo: Number(pagadoPeriodo.toFixed(2)),
+        });
+
+        const nowTs = Date.now();
+        const cartera = cotRows
+          .map((c) => {
+            const meta = fiadoMes.byCot.get(Number(c.id));
+            const pendiente = Math.max(safeNumber(meta?.pendiente, 0), 0);
+            if (pendiente <= 0) return null;
+
+            const baseFecha = meta?.first_fiado || c.aceptada_en || c.fecha || null;
+            const baseTs = baseFecha ? new Date(baseFecha).getTime() : null;
+            const dias = Number.isFinite(baseTs) ? Math.max(Math.floor((nowTs - baseTs) / 86400000), 0) : null;
+            const bucket = dias == null ? "sin_fecha" : dias <= 30 ? "0-30" : dias <= 60 ? "31-60" : "61+";
+
+            return {
+              cotizacion_id: c.id,
+              referencia: c.numero_caso || `COT-${c.id}`,
+              cliente: c.cliente || "-",
+              estado: c.estado || "pendiente",
+              pendiente: Number(pendiente.toFixed(2)),
+              dias,
+              bucket,
+              fecha_base: baseFecha,
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.pendiente - a.pendiente);
+        setCarteraRows(cartera);
       }
 
       const { data: mov, error: movErr } = await supabase
@@ -974,6 +1212,9 @@ export default function Finanzas() {
     } catch (e) {
       console.error(e);
       setMontoAdeudadoLedger(0);
+      setResumenFiadoMes({ fiado: 0, pagado: 0, pendiente: 0 });
+      setResumenFlujoMes({ fiado_periodo: 0, pagado_periodo: 0 });
+      setCarteraRows([]);
       Swal.fire("Error", "No se pudieron cargar los datos de Finanzas.", "error");
     } finally {
       setLoading(false);
@@ -1061,6 +1302,375 @@ export default function Finanzas() {
     return out.join("\n");
   }
 
+  async function construirEstadoCuentaMes({ start, end }) {
+    const { data: cot, error } = await supabase
+      .from("cotizaciones")
+      .select(
+        "id, numero_caso, cliente, cliente_id, vendedor_id, preventa_id, total, descuento, fecha, estado, usa_anticipo, monto_anticipo, monto_pendiente, aceptada_en, preparacion_en, rechazada_en, despachado_en"
+      )
+      .gte("fecha", start.toISOString())
+      .lte("fecha", end.toISOString())
+      .order("id", { ascending: false });
+
+    if (error) throw error;
+
+    const cotRows = (cot || []).map((c) => ({
+      ...c,
+      estado: String(c.estado || "pendiente").toLowerCase(),
+    }));
+    const fiadoMes = await calcularFiadoPorCotizaciones(cotRows, { start, end });
+    if (fiadoMes.error) console.warn("fiados_movimientos (estado_cuenta):", fiadoMes.error);
+
+    const estadoOrden = {
+      despachado: 1,
+      preparacion: 2,
+      aceptada: 3,
+      pendiente: 4,
+      rechazada: 5,
+    };
+    const estadoNombre = {
+      despachado: "Despachado",
+      preparacion: "Preparacion",
+      aceptada: "Aceptada",
+      pendiente: "Pendiente",
+      rechazada: "Rechazada",
+    };
+    const periodoLabel = `${ymd(start)} a ${ymd(end)}`;
+
+    const totalVendido = cotRows
+      .filter((c) => c.estado === "despachado")
+      .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
+    const totalComprometido = cotRows
+      .filter((c) => ["aceptada", "preparacion", "despachado"].includes(c.estado))
+      .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
+    const porDespachar = cotRows
+      .filter((c) => ["aceptada", "preparacion"].includes(c.estado))
+      .reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
+    const totalCotizado = cotRows.reduce((acc, c) => acc + safeNumber(c.total, 0), 0);
+
+    const ventasCount = cotRows.filter((c) => c.estado === "despachado").length;
+    const ticketProm = ventasCount ? totalVendido / ventasCount : 0;
+    const totalNoRech = cotRows.filter((c) => c.estado !== "rechazada").length;
+    const aceptadasCount = cotRows.filter((c) => ["aceptada", "preparacion", "despachado"].includes(c.estado)).length;
+    const conversion = totalNoRech ? (aceptadasCount / totalNoRech) * 100 : 0;
+
+    const fiadoTotalMes = fiadoMes.error
+      ? cotRows.reduce((acc, c) => acc + safeNumber(c.monto_pendiente, 0), 0)
+      : safeNumber(fiadoMes.totals.fiado, 0);
+    const pagadoTotalMes = fiadoMes.error ? 0 : safeNumber(fiadoMes.totals.pagado, 0);
+    const fiadoPeriodoMes = fiadoMes.error ? fiadoTotalMes : safeNumber(fiadoMes.totals.fiado_periodo, 0);
+    const pagadoPeriodoMes = fiadoMes.error ? 0 : safeNumber(fiadoMes.totals.pagado_periodo, 0);
+    const pendienteFiadoMes = fiadoMes.error ? fiadoTotalMes : safeNumber(fiadoMes.totals.pendiente, 0);
+
+    const resumenGeneralRows = [
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "001",
+        periodo: periodoLabel,
+        concepto: "Total cotizado",
+        estado: "",
+        cantidad: cotRows.length,
+        monto: Number(totalCotizado.toFixed(2)),
+        detalle: "Moneda RD$",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "002",
+        periodo: periodoLabel,
+        concepto: "Ventas despachadas",
+        estado: "despachado",
+        cantidad: ventasCount,
+        monto: Number(totalVendido.toFixed(2)),
+        detalle: "",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "003",
+        periodo: periodoLabel,
+        concepto: "Comprometido",
+        estado: "aceptada/preparacion/despachado",
+        cantidad: aceptadasCount,
+        monto: Number(totalComprometido.toFixed(2)),
+        detalle: "",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "004",
+        periodo: periodoLabel,
+        concepto: "Por despachar",
+        estado: "aceptada/preparacion",
+        cantidad: cotRows.filter((c) => ["aceptada", "preparacion"].includes(c.estado)).length,
+        monto: Number(porDespachar.toFixed(2)),
+        detalle: "",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "005",
+        periodo: periodoLabel,
+        concepto: "Ticket promedio",
+        estado: "despachado",
+        cantidad: ventasCount,
+        monto: Number(ticketProm.toFixed(2)),
+        detalle: "",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "006",
+        periodo: periodoLabel,
+        concepto: "Conversion",
+        estado: "",
+        cantidad: `${conversion.toFixed(1)}%`,
+        monto: "",
+        detalle: `${aceptadasCount}/${totalNoRech}`,
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "007",
+        periodo: periodoLabel,
+        concepto: "Fiado total",
+        estado: "",
+        cantidad: "",
+        monto: Number(fiadoTotalMes.toFixed(2)),
+        detalle: "Ledger fiados_movimientos",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: Number(fiadoTotalMes.toFixed(2)),
+        pagado_total: Number(pagadoTotalMes.toFixed(2)),
+        pendiente_fiado: Number(pendienteFiadoMes.toFixed(2)),
+        fiado_periodo: Number(fiadoPeriodoMes.toFixed(2)),
+        pagado_periodo: Number(pagadoPeriodoMes.toFixed(2)),
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "008",
+        periodo: periodoLabel,
+        concepto: "Fiado pagado",
+        estado: "",
+        cantidad: "",
+        monto: Number(pagadoTotalMes.toFixed(2)),
+        detalle: "Ledger fiados_movimientos",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: Number(fiadoTotalMes.toFixed(2)),
+        pagado_total: Number(pagadoTotalMes.toFixed(2)),
+        pendiente_fiado: Number(pendienteFiadoMes.toFixed(2)),
+        fiado_periodo: Number(fiadoPeriodoMes.toFixed(2)),
+        pagado_periodo: Number(pagadoPeriodoMes.toFixed(2)),
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+      {
+        seccion: "RESUMEN_GENERAL",
+        orden: "009",
+        periodo: periodoLabel,
+        concepto: "Fiado pendiente",
+        estado: "",
+        cantidad: "",
+        monto: Number(pendienteFiadoMes.toFixed(2)),
+        detalle: "Ledger fiados_movimientos",
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: Number(fiadoTotalMes.toFixed(2)),
+        pagado_total: Number(pagadoTotalMes.toFixed(2)),
+        pendiente_fiado: Number(pendienteFiadoMes.toFixed(2)),
+        fiado_periodo: Number(fiadoPeriodoMes.toFixed(2)),
+        pagado_periodo: Number(pagadoPeriodoMes.toFixed(2)),
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      },
+    ];
+
+    const aggEstado = new Map();
+    for (const c of cotRows) {
+      const st = String(c.estado || "pendiente").toLowerCase();
+      if (!aggEstado.has(st)) aggEstado.set(st, { cantidad: 0, monto: 0 });
+      const cur = aggEstado.get(st);
+      cur.cantidad += 1;
+      cur.monto += safeNumber(c.total, 0);
+    }
+
+    const resumenEstadoRows = Array.from(aggEstado.entries())
+      .sort((a, b) => (estadoOrden[a[0]] || 99) - (estadoOrden[b[0]] || 99))
+      .map(([st, v], idx) => ({
+        seccion: "RESUMEN_POR_ESTADO",
+        orden: `1${String(idx + 1).padStart(2, "0")}`,
+        periodo: periodoLabel,
+        concepto: "Distribucion por estado",
+        estado: st,
+        cantidad: v.cantidad,
+        monto: Number(v.monto.toFixed(2)),
+        detalle: estadoNombre[st] || st,
+        fecha: "",
+        cotizacion_id: "",
+        referencia: "",
+        cliente: "",
+        fiado_total: "",
+        pagado_total: "",
+        pendiente_fiado: "",
+        vendedor_id: "",
+        cliente_id: "",
+        preventa_id: "",
+      }));
+
+    const detalleRows = cotRows
+      .slice()
+      .sort((a, b) => {
+        const stCmp = (estadoOrden[a.estado] || 99) - (estadoOrden[b.estado] || 99);
+        if (stCmp !== 0) return stCmp;
+        const ta = new Date(a.fecha || 0).getTime();
+        const tb = new Date(b.fecha || 0).getTime();
+        if (ta !== tb) return tb - ta;
+        return safeNumber(b.id, 0) - safeNumber(a.id, 0);
+      })
+      .map((c, idx) => {
+        const id = Number(c.id);
+        const fallbackPendiente = safeNumber(c.monto_pendiente, 0);
+        const meta = fiadoMes.error
+          ? null
+          : fiadoMes.byCot.get(id) || { fiado: 0, pago: 0, fiado_periodo: 0, pagado_periodo: 0 };
+        let fiadoTotal = 0;
+        let pagadoTotal = 0;
+        let pendienteFiado = 0;
+
+        if (fiadoMes.error) {
+          fiadoTotal = fallbackPendiente;
+          pagadoTotal = 0;
+          pendienteFiado = fallbackPendiente;
+        } else {
+          fiadoTotal = Number(safeNumber(meta.fiado, 0).toFixed(2));
+          pagadoTotal = Number(safeNumber(meta.pago, 0).toFixed(2));
+          pendienteFiado = Number(Math.max(fiadoTotal - pagadoTotal, 0).toFixed(2));
+        }
+
+        return {
+          seccion: "DETALLE_COTIZACIONES",
+          orden: `2${String(idx + 1).padStart(4, "0")}`,
+          periodo: periodoLabel,
+          concepto: "Cotizacion",
+          estado: c.estado,
+          cantidad: 1,
+          monto: Number(safeNumber(c.total, 0).toFixed(2)),
+          detalle: estadoNombre[c.estado] || c.estado,
+          fecha: fmtDateTime(c.fecha),
+          cotizacion_id: c.id,
+          referencia: c.numero_caso || `COT-${c.id}`,
+          cliente: c.cliente || "",
+          fiado_total: fiadoTotal,
+          pagado_total: pagadoTotal,
+          pendiente_fiado: pendienteFiado,
+          fiado_periodo: Number(safeNumber(meta?.fiado_periodo, 0).toFixed(2)),
+          pagado_periodo: Number(safeNumber(meta?.pagado_periodo, 0).toFixed(2)),
+          vendedor_id: c.vendedor_id || "",
+          cliente_id: c.cliente_id || "",
+          preventa_id: c.preventa_id || "",
+        };
+      });
+
+    const rows = [...resumenGeneralRows, ...resumenEstadoRows, ...detalleRows];
+    const headers = [
+      "seccion",
+      "orden",
+      "periodo",
+      "concepto",
+      "estado",
+      "cantidad",
+      "monto",
+      "detalle",
+      "fecha",
+      "cotizacion_id",
+      "referencia",
+      "cliente",
+      "fiado_total",
+      "pagado_total",
+      "pendiente_fiado",
+      "fiado_periodo",
+      "pagado_periodo",
+      "vendedor_id",
+      "cliente_id",
+      "preventa_id",
+    ];
+
+    return {
+      rows,
+      headers,
+      resumenGeneralRows,
+      resumenEstadoRows,
+      detalleRows,
+      periodoLabel,
+    };
+  }
+
   async function exportarCsvMesPasado() {
     try {
       const now = new Date();
@@ -1068,53 +1678,116 @@ export default function Finanzas() {
       const start = startOfMonth(prevMonth);
       const end = endOfMonth(prevMonth);
 
-      const { data: cot, error } = await supabase
-        .from("cotizaciones")
-        .select(
-          "id, cliente, cliente_id, vendedor_id, preventa_id, total, descuento, fecha, estado, usa_anticipo, monto_anticipo, monto_pendiente, aceptada_en, preparacion_en, rechazada_en, despachado_en"
-        )
-        .gte("fecha", start.toISOString())
-        .lte("fecha", end.toISOString())
-        .order("id", { ascending: false });
-
-      if (error) throw error;
-
-      const rows = (cot || []).map((c) => ({
-        id: c.id,
-        cliente: c.cliente || "",
-        cliente_id: c.cliente_id || "",
-        vendedor_id: c.vendedor_id || "",
-        preventa_id: c.preventa_id || "",
-        total: safeNumber(c.total, 0),
-        descuento: safeNumber(c.descuento, 0),
-        estado: (c.estado || "").toLowerCase(),
-        fecha: c.fecha || "",
-        aceptada_en: c.aceptada_en || "",
-        preparacion_en: c.preparacion_en || "",
-        despachado_en: c.despachado_en || "",
-        usa_anticipo: c.usa_anticipo ? "true" : "false",
-        monto_anticipo: safeNumber(c.monto_anticipo, 0),
-        monto_pendiente: safeNumber(c.monto_pendiente, 0),
-      }));
-
-      const headers = Object.keys(rows[0] || { id: "" });
+      const { rows, headers } = await construirEstadoCuentaMes({ start, end });
       const csv = buildCsv(rows, headers);
 
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `finanzas_cotizaciones_${start.getFullYear()}_${pad2(start.getMonth() + 1)}.csv`;
+      a.download = `finanzas_estado_cuenta_${start.getFullYear()}_${pad2(start.getMonth() + 1)}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
 
-      Swal.fire("Listo", "CSV del mes pasado exportado.", "success");
+      Swal.fire("Listo", "CSV de estado de cuenta exportado.", "success");
     } catch (e) {
       console.error(e);
-      Swal.fire("Error", "No se pudo exportar CSV del mes pasado.", "error");
+      Swal.fire("Error", "No se pudo exportar el CSV de estado de cuenta.", "error");
+    }
+  }
+
+  async function exportarPdfMesPasado() {
+    try {
+      const now = new Date();
+      const prevMonth = startOfMonth(addMonths(now, -1));
+      const start = startOfMonth(prevMonth);
+      const end = endOfMonth(prevMonth);
+
+      const { resumenGeneralRows, resumenEstadoRows, detalleRows, periodoLabel } = await construirEstadoCuentaMes({
+        start,
+        end,
+      });
+
+      const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "landscape" });
+      const marginX = 34;
+      const pageW = doc.internal.pageSize.getWidth();
+      let y = 34;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Estado de Cuenta - Finanzas", marginX, y);
+      y += 18;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Periodo: ${periodoLabel}`, marginX, y);
+      doc.text(`Generado: ${fmtDateTime(new Date().toISOString())}`, pageW - marginX, y, { align: "right" });
+      y += 14;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Concepto", "Estado", "Cantidad", "Monto", "Detalle"]],
+        body: resumenGeneralRows.map((r) => [
+          r.concepto,
+          r.estado || "-",
+          String(r.cantidad ?? ""),
+          r.monto !== "" ? fmtMoney(r.monto) : "",
+          r.detalle || "",
+        ]),
+        theme: "grid",
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [22, 163, 74], textColor: 255 },
+      });
+
+      y = doc.lastAutoTable.finalY + 12;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Estado", "Cantidad", "Monto"]],
+        body: resumenEstadoRows.map((r) => [r.estado, String(r.cantidad ?? 0), fmtMoney(r.monto)]),
+        theme: "grid",
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      });
+
+      y = doc.lastAutoTable.finalY + 12;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Ref", "Fecha", "Cliente", "Estado", "Monto", "Fiado", "Pagado", "Pendiente"]],
+        body: detalleRows.map((r) => [
+          r.referencia || `#${r.cotizacion_id}`,
+          r.fecha || "",
+          r.cliente || "",
+          r.estado || "",
+          fmtMoney(r.monto),
+          fmtMoney(r.fiado_total),
+          fmtMoney(r.pagado_total),
+          fmtMoney(r.pendiente_fiado),
+        ]),
+        theme: "grid",
+        styles: { fontSize: 7, cellPadding: 3.5 },
+        headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 95 },
+          1: { cellWidth: 95 },
+          2: { cellWidth: 190 },
+          3: { cellWidth: 70 },
+          4: { cellWidth: 70, halign: "right" },
+          5: { cellWidth: 70, halign: "right" },
+          6: { cellWidth: 70, halign: "right" },
+          7: { cellWidth: 80, halign: "right" },
+        },
+      });
+
+      doc.save(`finanzas_estado_cuenta_${start.getFullYear()}_${pad2(start.getMonth() + 1)}.pdf`);
+      Swal.fire("Listo", "PDF de estado de cuenta exportado.", "success");
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo exportar el PDF de estado de cuenta.", "error");
     }
   }
 
@@ -1177,9 +1850,6 @@ export default function Finanzas() {
             <GhostBtn onClick={() => setMesCursor(startOfMonth(addMonths(mesCursor, -1)))} disabled={loading}>
               <CalendarDays size={16} /> Mes anterior
             </GhostBtn>
-            <GhostBtn onClick={() => setMesCursor(startOfMonth(addMonths(mesCursor, 1)))} disabled={loading}>
-              <CalendarDays size={16} /> Mes siguiente
-            </GhostBtn>
 
             <GhostBtn onClick={() => setMesCursor(startOfMonth(new Date()))} disabled={loading}>
               <Filter size={16} /> Ir a mes actual
@@ -1206,6 +1876,9 @@ export default function Finanzas() {
             <BannerActions>
               <GhostBtn onClick={exportarCsvMesPasado}>
                 <Download size={16} /> Exportar CSV mes pasado
+              </GhostBtn>
+              <GhostBtn onClick={exportarPdfMesPasado}>
+                <Download size={16} /> Exportar PDF mes pasado
               </GhostBtn>
               <GhostBtn onClick={limpiarCacheFinanzas}>
                 <Filter size={16} /> Limpiar cache finanzas
@@ -1270,7 +1943,11 @@ export default function Finanzas() {
               <DollarSign size={16} />
             </StatTop>
             <StatValue>{fmtMoney(stats.montoAdeudado)}</StatValue>
-            <Muted>Saldo pendiente en ledger de fiados (fiado - pagos).</Muted>
+            <Muted>Saldo pendiente del mes seleccionado (ledger de fiados: fiado - pagos).</Muted>
+            <Muted>
+              Fiado: <strong>{fmtMoney(resumenFiadoMes.fiado)}</strong> - Pagado: <strong>{fmtMoney(resumenFiadoMes.pagado)}</strong> -
+              Pendiente: <strong>{fmtMoney(resumenFiadoMes.pendiente)}</strong>
+            </Muted>
           </StatCard>
 
           <StatCard>
@@ -1305,6 +1982,50 @@ export default function Finanzas() {
             <StatValue>{stats.ventasCount}</StatValue>
             <Muted>Cantidad de cotizaciones despachadas (venta real).</Muted>
           </StatCard>
+
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <DollarSign size={16} /> Fiado generado (mes)
+              </StatTitle>
+              <DollarSign size={16} />
+            </StatTop>
+            <StatValue>{fmtMoney(stats.fiadoEmitidoMes)}</StatValue>
+            <Muted>Total de movimientos tipo fiado dentro del periodo.</Muted>
+          </StatCard>
+
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <DollarSign size={16} /> Cobros fiado (mes)
+              </StatTitle>
+              <ShieldCheck size={16} />
+            </StatTop>
+            <StatValue>{fmtMoney(stats.cobrosFiadoMes)}</StatValue>
+            <Muted>Total cobrado a fiados dentro del periodo.</Muted>
+          </StatCard>
+
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <TrendingUp size={16} /> Cobertura cobros
+              </StatTitle>
+              <TrendingUp size={16} />
+            </StatTop>
+            <StatValue>{`${stats.coberturaCobranza.toFixed(1)}%`}</StatValue>
+            <Muted>Cobrado del periodo dividido entre fiado del periodo.</Muted>
+          </StatCard>
+
+          <StatCard>
+            <StatTop>
+              <StatTitle>
+                <Clock size={16} /> Cartera CxC
+              </StatTitle>
+              <Clock size={16} />
+            </StatTop>
+            <StatValue>{fmtMoney(stats.carteraPendiente)}</StatValue>
+            <Muted>Saldo pendiente activo en {stats.carteraClientes} cliente(s).</Muted>
+          </StatCard>
         </Grid>
 
         {/* =========================
@@ -1327,14 +2048,6 @@ export default function Finanzas() {
                     <CalendarDays size={16} />
                     {monthLabel(mesCursor)}
                   </CalTitle>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <GhostBtn onClick={() => setMesCursor(startOfMonth(addMonths(mesCursor, -1)))} disabled={loading}>
-                      Mes -1
-                    </GhostBtn>
-                    <GhostBtn onClick={() => setMesCursor(startOfMonth(addMonths(mesCursor, 1)))} disabled={loading}>
-                      Mes +1
-                    </GhostBtn>
-                  </div>
                 </CalHeader>
 
                 <CalGridWrap>
@@ -1523,6 +2236,95 @@ export default function Finanzas() {
         </TwoCol>
 
         {/* =========================
+            Cuentas por cobrar (aging)
+        ========================= */}
+        <Panel style={{ marginTop: "0.85rem" }}>
+          <PanelTitle>
+            <Clock size={18} /> Cuentas por cobrar (antiguedad)
+          </PanelTitle>
+          <Muted>Antiguedad de saldo fiado pendiente para cotizaciones del periodo seleccionado.</Muted>
+
+          <div
+            style={{
+              marginTop: 10,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: 8,
+            }}
+          >
+            <div style={{ border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: "0.6rem 0.75rem" }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Total cartera</div>
+              <strong>{fmtMoney(carteraResumen.total)}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: "0.6rem 0.75rem" }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>0-30 dias</div>
+              <strong>{fmtMoney(carteraResumen.b0_30)}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: "0.6rem 0.75rem" }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>31-60 dias</div>
+              <strong>{fmtMoney(carteraResumen.b31_60)}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: "0.6rem 0.75rem" }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>61+ dias</div>
+              <strong>{fmtMoney(carteraResumen.b61)}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(148,163,184,.35)", borderRadius: 12, padding: "0.6rem 0.75rem" }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Sin fecha base</div>
+              <strong>{fmtMoney(carteraResumen.bsf)}</strong>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <TableWrap>
+              <Table $minWidth={920}>
+                <thead>
+                  <tr>
+                    <th>Ref</th>
+                    <th>Cliente</th>
+                    <th>Estado</th>
+                    <th>Antiguedad</th>
+                    <th>Fecha base</th>
+                    <th>Pendiente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6}>
+                        <SkeletonRow />
+                      </td>
+                    </tr>
+                  ) : carteraRows.length ? (
+                    carteraRows.slice(0, 80).map((r) => (
+                      <tr key={`cartera-${r.cotizacion_id}`}>
+                        <td data-label="Ref">
+                          <strong>{r.referencia}</strong>
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>#{r.cotizacion_id}</div>
+                        </td>
+                        <td data-label="Cliente">{r.cliente}</td>
+                        <td data-label="Estado">{r.estado}</td>
+                        <td data-label="Antiguedad">
+                          {r.dias == null ? "Sin fecha" : `${r.dias} d`}
+                          <div style={{ fontSize: 12, opacity: 0.75 }}>{r.bucket}</div>
+                        </td>
+                        <td data-label="Fecha base">{fmtDateTime(r.fecha_base)}</td>
+                        <td data-label="Pendiente">
+                          <strong>{fmtMoney(r.pendiente)}</strong>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6}>No hay cartera pendiente para este periodo.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+            </TableWrap>
+          </div>
+        </Panel>
+
+        {/* =========================
             Top 10 (BarChart with colors)
         ========================= */}
         <Panel style={{ marginTop: "0.85rem" }}>
@@ -1663,6 +2465,9 @@ export default function Finanzas() {
           <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <GhostBtn onClick={exportarCsvMesPasado}>
               <Download size={16} /> Exportar CSV mes pasado
+            </GhostBtn>
+            <GhostBtn onClick={exportarPdfMesPasado}>
+              <Download size={16} /> Exportar PDF mes pasado
             </GhostBtn>
             <GhostBtn onClick={limpiarCacheFinanzas}>
               <Filter size={16} /> Limpiar cache finanzas
