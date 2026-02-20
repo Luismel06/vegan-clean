@@ -15,7 +15,7 @@ import {
   CreditCard,
   History,
   Settings2,
-} from "lucide-react"; /* el cambio VA*/
+} from "lucide-react";
 
 /* =========================
    HELPERS
