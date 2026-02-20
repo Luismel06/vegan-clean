@@ -1,8 +1,9 @@
-// src/pages/admin/Cotizaciones.jsx
+﻿// src/pages/admin/Cotizaciones.jsx
 import { useEffect, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { supabase } from "../../supabase/supabase.config.jsx";
 import Swal from "sweetalert2";
+import emailjs from "emailjs-com";
 import {
   Eye,
   Trash2,
@@ -516,6 +517,18 @@ function fmtMoney(v) {
     maximumFractionDigits: 2,
   })}`;
 }
+function buildItemsTexto(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return "";
+  return items
+    .map((it) => {
+      const tipoLabel = it?.tipo === "equipo" ? "Equipo" : "Producto";
+      const nombre = String(it?.nombre || "-");
+      const modelo = String(it?.modelo || "").trim();
+      const cant = safeNumber(it?.cantidad, 0);
+      return `â€¢ (${tipoLabel}) ${nombre} x${cant}${modelo ? ` - ${modelo}` : ""}`;
+    })
+    .join("\n");
+}
 function onlyDigits(v) {
   return String(v || "").replace(/\D/g, "");
 }
@@ -565,6 +578,49 @@ function estadosCotizacionOpciones() {
     { value: "rechazada", label: "Rechazada" },
     { value: "cancelada", label: "Cancelada" },
   ];
+}
+
+async function enviarCorreoCotizacionProcesadaEmailJS({
+  toEmail,
+  clienteNombre,
+  cotizacionId,
+  numeroCaso,
+  total,
+  estado,
+  itemsText,
+  usaAnticipo,
+  montoAnticipo,
+  montoPendiente,
+  esFiado,
+}) {
+  const to = String(toEmail || "").trim();
+  if (!to) return;
+
+  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_lwogm5i";
+  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_COTIZACION_ID || "template_sfqnx7u";
+  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "yoOeYAk8XPOIvEhbf";
+  const appBaseUrl = String(import.meta.env.VITE_APP_WEB_URL || "https://vega-clean.vercel.app")
+    .trim()
+    .replace(/\/+$/g, "");
+  const cotizacionUrl = `${appBaseUrl}/admin/cotizaciones`;
+
+  const templateParams = {
+    cliente: String(clienteNombre || "Cliente"),
+    email: to,
+    cotizacion_id: String(cotizacionId || ""),
+    numero_caso: String(numeroCaso || ""),
+    estado: String(estado || "pendiente"),
+    total: fmtMoney(total),
+    items: itemsText || "",
+    usa_anticipo: usaAnticipo ? "Si" : "No",
+    monto_anticipo: fmtMoney(montoAnticipo),
+    monto_pendiente: fmtMoney(montoPendiente),
+    es_fiado: esFiado ? "Si" : "No",
+    fecha: new Date().toLocaleString("es-DO"),
+    cotizacion_url: cotizacionUrl,
+  };
+
+  await emailjs.send(serviceId, templateId, templateParams, publicKey);
 }
 
 /* =========================
@@ -1394,6 +1450,24 @@ export default function Cotizaciones() {
         .from("preventas")
         .update({ estado: "cotizada", cliente_id: clienteSel.id })
         .eq("id", Number(preventaSeleccionada));
+    }
+
+    try {
+      await enviarCorreoCotizacionProcesadaEmailJS({
+        toEmail: clienteSel?.email || "",
+        clienteNombre: clienteSel?.nombre || clienteSel?.email || "Cliente",
+        cotizacionId: cot.id,
+        numeroCaso: preventaCargada?.numero_caso || cot?.numero_caso || "",
+        total,
+        estado: "pendiente",
+        itemsText: buildItemsTexto(detalleSeguro),
+        usaAnticipo: anticipoSolicitado,
+        montoAnticipo,
+        montoPendiente: montoFiado,
+        esFiado: fiadoSolicitado || montoFiado > 0,
+      });
+    } catch (mailErr) {
+      console.warn("Cotizacion guardada, pero correo EmailJS fallo:", mailErr);
     }
 
     Swal.fire(

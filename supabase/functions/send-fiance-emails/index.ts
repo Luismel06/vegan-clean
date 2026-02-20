@@ -6,7 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "FROM_PLACEHOLDER@YOUR_DOMAIN.COM";
+// Resend test sender for environments without verified domain.
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Vega Clean <onboarding@resend.dev>";
 const APP_WEB_URL = (Deno.env.get("APP_WEB_URL") ?? "").trim().replace(/\/+$/g, "");
 
 const CORS_HEADERS = {
@@ -575,4 +576,3 @@ serve(async (req) => {
     return jsonResponse({ ok: false, error: String((e as any)?.message ?? e) }, 500);
   }
 });
-

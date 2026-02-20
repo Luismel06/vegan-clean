@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
+import emailjs from "emailjs-com";
 import { supabase } from "../../supabase/supabase.config";
 import { AREAS_CLIENTE, isAreaClienteValida, normalizeAreaCliente } from "../../shared/areasCliente.js";
 
@@ -989,7 +990,7 @@ export default function Servicios() {
       .join("\n");
   }, [carritoItems]);
 
-  async function enviarCorreoOrdenRecibidaResend({
+  async function enviarCorreoOrdenRecibidaEmailJS({
     tipoClienteLocal,
     cliente,
     email,
@@ -1001,48 +1002,34 @@ export default function Servicios() {
     nota,
     numeroCaso,
     preventaId,
-    items,
+    itemsText,
   }) {
-    const trackingUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin.replace(/\/+$/g, "")}/servicios`
-        : "";
+    const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_lwogm5i";
+    const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ORDEN_ID || "template_6k39bnl";
+    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "yoOeYAk8XPOIvEhbf";
+    const appBaseUrl = String(import.meta.env.VITE_APP_WEB_URL || "https://vega-clean.vercel.app")
+      .trim()
+      .replace(/\/+$/g, "");
+    const trackingUrl = `${appBaseUrl}/servicios`;
 
-    const payload = {
+    const templateParams = {
       tipo_cliente: tipoClienteLocal,
-      cliente_nombre: cliente,
+      cliente,
       email,
       telefono,
       direccion: area,
       cedula: cedula || "",
       empresa_nombre: empresaNombre || "",
       empresa_rnc: empresaRnc || "",
+      items: itemsText || "",
       nota: nota || "",
-      numero_caso: numeroCaso,
-      preventa_id: String(preventaId),
+      numero_caso: String(numeroCaso || ""),
+      preventa_id: String(preventaId || ""),
+      fecha: new Date().toLocaleString("es-DO"),
       tracking_url: trackingUrl,
-      fecha: new Date().toISOString(),
-      items: (items || []).map((it) => ({
-        tipo: it.tipo || "producto",
-        nombre: it.nombre,
-        qty: Number(it.qty || 1),
-        modelo: it.modelo || "",
-      })),
     };
 
-    const { data, error } = await supabase.functions.invoke("send-fiance-emails", {
-      body: {
-        mode: "direct_send",
-        event_type: "orden_recibida",
-        to_email: email,
-        payload,
-      },
-    });
-
-    if (error) throw error;
-    if (data?.ok === false) {
-      throw new Error(data?.error || "No se pudo enviar correo con Resend.");
-    }
+    await emailjs.send(serviceId, templateId, templateParams, publicKey);
   }
 
   // ========= AUTOCOMPLETAR CLIENTE =========
@@ -1313,7 +1300,7 @@ export default function Servicios() {
       }
 
       try {
-        await enviarCorreoOrdenRecibidaResend({
+        await enviarCorreoOrdenRecibidaEmailJS({
           tipoClienteLocal: tipoCliente,
           cliente,
           email,
@@ -1325,10 +1312,10 @@ export default function Servicios() {
           nota: nota || "",
           numeroCaso: numero_caso,
           preventaId: p.id,
-          items: carritoItems,
+          itemsText: itemsTexto,
         });
       } catch (mailErr) {
-        console.warn("⚠️ Preventa creada, pero correo Resend falló:", mailErr);
+        console.warn("⚠️ Preventa creada, pero correo EmailJS falló:", mailErr);
       }
 
       try {
