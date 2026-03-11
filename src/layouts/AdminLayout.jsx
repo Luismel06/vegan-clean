@@ -629,6 +629,7 @@ const RPC_DELETE_NOTIF = "admin_delete_notificacion";
 const RPC_CLEANUP_NOTIF = "admin_cleanup_notificaciones";
 const NOTIF_KEEP_DAYS = 30;
 const TOAST_RECENT_MS = 5 * 60 * 1000;
+const LOCAL_READ_KEY = "admin_notif_read_ids_v1";
 
 function formatNotifTime(iso) {
   const d = new Date(iso);
@@ -643,6 +644,29 @@ function notifTimestamp(row) {
 
 function sortNotificationsDesc(rows) {
   return [...(rows || [])].sort((a, b) => notifTimestamp(b) - notifTimestamp(a));
+}
+
+function loadLocalIdSet(key, userId) {
+  if (!userId || typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(`${key}:${userId}`);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.map((x) => Number(x)).filter((x) => Number.isFinite(x)));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLocalIdSet(key, userId, set) {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    const arr = Array.from(set || []).map((x) => Number(x)).filter((x) => Number.isFinite(x));
+    window.localStorage.setItem(`${key}:${userId}`, JSON.stringify(arr));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 /* =========================
@@ -719,6 +743,14 @@ export function AdminLayout() {
     });
     if (error) throw error;
 
+    const readSet = loadLocalIdSet(LOCAL_READ_KEY, userId);
+    if (!payload) {
+      notifications.forEach((n) => readSet.add(Number(n.id)));
+    } else {
+      payload.forEach((id) => readSet.add(Number(id)));
+    }
+    saveLocalIdSet(LOCAL_READ_KEY, userId, readSet);
+
     if (!payload) {
       const nowIso = new Date().toISOString();
       setNotifications((prev) => prev.map((n) => ({ ...n, leida: true, leida_en: nowIso })));
@@ -773,14 +805,20 @@ export function AdminLayout() {
 
     if (error) throw error;
 
-    const nextNotifications = sortNotificationsDesc((data || []).map(normalizeNotificationRow));
+    const readSet = loadLocalIdSet(LOCAL_READ_KEY, userId);
+    const nextNotifications = sortNotificationsDesc((data || []).map(normalizeNotificationRow)).map((n) =>
+      readSet.has(Number(n.id)) ? { ...n, leida: true } : n
+    );
     setNotifications(nextNotifications);
 
     const now = Date.now();
     for (const notif of nextNotifications) {
+      if (notif.estado && String(notif.estado).toLowerCase() !== "activa") {
+        announcedToastKeysRef.current.delete(String(notif.id));
+      }
       const t = new Date(notif.actualizada_en || notif.creada_en).getTime();
       const isRecent = Number.isFinite(t) ? now - t <= TOAST_RECENT_MS : false;
-      const toastKey = `${notif.id}:${notif.actualizada_en || notif.creada_en}`;
+      const toastKey = String(notif.id);
       if (!notif.leida && isRecent && !announcedToastKeysRef.current.has(toastKey)) {
         announcedToastKeysRef.current.add(toastKey);
         pushToast(notif);

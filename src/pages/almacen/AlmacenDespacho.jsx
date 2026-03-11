@@ -93,6 +93,19 @@ function safeNum(v, fb = 0) {
   return Number.isFinite(n) ? n : fb;
 }
 
+function humanizeStockError(msg, items = []) {
+  if (!msg) return msg;
+  return String(msg).replace(/(producto|equipo)(?:_id)?\s*#?\s*(\d+)/gi, (full, tipo, id) => {
+    const t = String(tipo || "").toLowerCase();
+    const item = (items || []).find(
+      (it) => String(it?.tipo || "").toLowerCase() === t && Number(it?.item_id) === Number(id)
+    );
+    if (!item?.nombre) return full;
+    const label = t === "equipo" ? "equipo" : "producto";
+    return `${label} "${item.nombre}"`;
+  });
+}
+
 /** ===== Normalización agresiva (scanner) =====
  * Quita CR/LF/TAB/espacios y cualquier whitespace raro.
  */
@@ -344,7 +357,13 @@ export default function AlmacenDespacho() {
 
       if (error) {
         console.error(error);
-        Swal.fire("Error", error.message || "No se pudo confirmar el despacho.", "error");
+        const rawMsg =
+          error.details ||
+          error.message ||
+          error.hint ||
+          "No se pudo confirmar el despacho.";
+        const friendlyMsg = humanizeStockError(rawMsg, items);
+        Swal.fire("Error", friendlyMsg, "error");
         return;
       }
 
