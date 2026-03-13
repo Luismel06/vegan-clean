@@ -12,7 +12,7 @@ export const insertarUsuario = async (nuevoUsuario) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error("❌ Error al insertar usuario:", error.message);
+    console.error("  Error al insertar usuario:", error.message);
     throw error;
   }
 };
@@ -28,7 +28,7 @@ export const mostrarUsuarios = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error("❌ Error al mostrar usuarios:", error.message);
+    console.error("  Error al mostrar usuarios:", error.message);
     return [];
   }
 };
@@ -45,7 +45,7 @@ export const actualizarUsuario = async (id, camposActualizados) => {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error("❌ Error al actualizar usuario:", error.message);
+    console.error("  Error al actualizar usuario:", error.message);
     throw error;
   }
 };
@@ -57,7 +57,7 @@ export const eliminarUsuario = async (id) => {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error("❌ Error al eliminar usuario:", error.message);
+    console.error("  Error al eliminar usuario:", error.message);
     throw error;
   }
 };
@@ -74,7 +74,7 @@ export const buscarUsuarioPorCorreo = async (email) => {
     if (error && error.code !== "PGRST116") throw error; // Ignorar "no encontrado"
     return data || null;
   } catch (error) {
-    console.error("❌ Error al buscar usuario por correo:", error.message);
+    console.error("  Error al buscar usuario por correo:", error.message);
     return null;
   }
 };

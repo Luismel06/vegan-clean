@@ -17,6 +17,6 @@ export const enviarCorreoConfirmacion = async (datos) => {
 
     console.log("  Correo de confirmación enviado correctamente");
   } catch (error) {
-    console.error("❌ Error al enviar correo:", error);
+    console.error("  Error al enviar correo:", error);
   }
 };

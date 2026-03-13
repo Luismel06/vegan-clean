@@ -5,7 +5,7 @@ import { supabase } from "./supabase.config";
 export const insertarSolicitud = async (solicitud) => {
   const { data, error } = await supabase.from("solicitudes").insert([solicitud]);
   if (error) {
-    console.error("❌ Error insertando solicitud:", error.message);
+    console.error("  Error insertando solicitud:", error.message);
     throw error;
   }
   return data;
@@ -17,6 +17,6 @@ export const obtenerSolicitudes = async () => {
     .from("solicitudes")
     .select("*")
     .order("fecha", { ascending: false });
-  if (error) console.error("❌ Error obteniendo solicitudes:", error.message);
+  if (error) console.error("  Error obteniendo solicitudes:", error.message);
   return data;
 };

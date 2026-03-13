@@ -597,7 +597,7 @@ export default function Publicaciones() {
       const { error: uploadError } = await supabase.storage.from("publicaciones").upload(filePath, file);
 
       if (uploadError) {
-        console.error("❌ Error subiendo imagen:", uploadError);
+        console.error("Error subiendo imagen:", uploadError);
         throw uploadError;
       }
 

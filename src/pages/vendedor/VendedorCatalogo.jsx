@@ -427,10 +427,10 @@ const MobileCartBar = styled.div`
     left: 12px;
     right: 12px;
 
-    /* ✅ SUBIDO para NO tapar el BottomNav del layout */
+    /* SUBIDO para NO tapar el BottomNav del layout */
     bottom: calc(12px + 64px + 10px);
 
-    /* ✅ menor que el BottomNav del layout */
+    /* menor que el BottomNav del layout */
     z-index: 1900;
 
     border: 1px solid ${({ theme }) => theme.border};
@@ -499,7 +499,7 @@ const MobileSafeSpace = styled.div`
   display: none;
   @media (max-width: 900px) {
     display: block;
-    /* ✅ espacio para Carrito + gap + BottomNav + gap */
+    /* espacio para Carrito + gap + BottomNav + gap */
     height: 170px;
   }
 `;

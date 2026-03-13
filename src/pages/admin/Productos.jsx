@@ -542,7 +542,7 @@ export default function Productos() {
         modelo: modelo || null,
         descripcion: form.descripcion || null,
         imagen_url: uploadedPath || null,
-        // ✅ NO mandamos codigo_barra, lo genera el trigger
+        // NO mandamos codigo_barra, lo genera el trigger
       };
 
       const { data, error } = await supabase.from("productos").insert([payload]).select().single();
@@ -579,7 +579,7 @@ export default function Productos() {
         modelo: modelo || null,
         descripcion: form.descripcion || null,
         imagen_url: uploadedPath || null,
-        // ✅ no tocamos codigo_barra en update
+        // no tocamos codigo_barra en update
       };
 
       const { data, error } = await supabase.from("productos").update(payload).eq("id", editingId).select().single();

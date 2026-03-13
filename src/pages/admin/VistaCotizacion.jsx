@@ -440,7 +440,7 @@ export default function VistaCotizacion() {
     if (!cotizacion) return;
 
     try {
-      // ✅ Enviar a almacén: NO descuenta inventario, solo pasa a "preparacion"
+      // Enviar a almacén: NO descuenta inventario, solo pasa a "preparacion"
       if (nuevoEstado === "aceptada") {
         const { error } = await supabase
           .from("cotizaciones")
@@ -454,7 +454,7 @@ export default function VistaCotizacion() {
         }
 
         Swal.fire("Preparación", "Enviada a almacén para despacho.", "success");
-        await fetchCotizacionYDetalle(); // ✅ aquí estaba tu bug (llamabas fetchCotizacion)
+        await fetchCotizacionYDetalle(); //
         return;
       }
 
@@ -821,7 +821,7 @@ export default function VistaCotizacion() {
       return;
     }
 
-    // ✅ Si ya está en preparación/aceptada, bloquea edición
+
     if (cotizacion.estado === "aceptada" || cotizacion.estado === "preparacion") {
       Swal.fire("No editable", "No se puede editar una cotización enviada a almacén.", "warning");
       return;

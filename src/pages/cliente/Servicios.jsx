@@ -743,7 +743,7 @@ export default function Servicios() {
         .order("id", { ascending: true });
 
       if (error) {
-        console.error("❌ Error al cargar productos:", error);
+        console.error("Error al cargar productos:", error);
         setProductos([]);
       } else {
         const mapped = (data || []).map((p) => ({
@@ -772,7 +772,7 @@ export default function Servicios() {
         .order("id", { ascending: true });
 
       if (error) {
-        console.error("❌ Error al cargar equipos:", error);
+        console.error("  Error al cargar equipos:", error);
         setEquipos([]);
       } else {
         const mapped = (data || []).map((e) => ({
@@ -1088,7 +1088,7 @@ export default function Servicios() {
         if (isAreaClienteValida(area)) areaEl.value = area;
       }
     } catch (err) {
-      console.error("❌ Autocomplete error:", err);
+      console.error("  Autocomplete error:", err);
     } finally {
       setAutoLoading(false);
     }
@@ -1133,7 +1133,7 @@ export default function Servicios() {
         .single();
 
       if (error) {
-        console.error("❌ upsert cliente (persona):", error);
+        console.error("  upsert cliente (persona):", error);
         Swal.fire("Error", "No se pudo registrar el cliente.", "error");
         return null;
       }
@@ -1155,7 +1155,7 @@ export default function Servicios() {
       .single();
 
     if (error) {
-      console.error("❌ upsert cliente (empresa):", error);
+      console.error("  upsert cliente (empresa):", error);
       Swal.fire("Error", "No se pudo registrar el cliente.", "error");
       return null;
     }
@@ -1270,7 +1270,7 @@ export default function Servicios() {
         .single();
 
       if (errPreventa || !p) {
-        console.error("❌ Error creando preventa:", errPreventa);
+        console.error("  Error creando preventa:", errPreventa);
         Swal.fire({
           icon: "error",
           title: "No se pudo enviar tu solicitud",
@@ -1289,7 +1289,7 @@ export default function Servicios() {
 
       const { error: errDet } = await supabase.from("detalle_preventa").insert(detalleRows);
       if (errDet) {
-        console.error("❌ Error creando detalle_preventa:", errDet);
+        console.error("  Error creando detalle_preventa:", errDet);
         Swal.fire({
           icon: "error",
           title: "Preventa creada, pero faltó el detalle",
@@ -1342,7 +1342,7 @@ export default function Servicios() {
       setTipoCliente("persona");
       setCarrito({});
     } catch (error) {
-      console.error("❌ Error general:", error);
+      console.error("  Error general:", error);
       Swal.fire({
         icon: "error",
         title: "Error al enviar",
@@ -1375,7 +1375,7 @@ export default function Servicios() {
           </Subtitle>
         </HeaderBlock>
 
-        {/* ✅ CONSULTA ARRIBA (NO LATERAL) */}
+        {/* CONSULTA ARRIBA (NO LATERAL) */}
         <CaseCard>
           <CaseTitle>Consulta el estado de tu solicitud</CaseTitle>
           <CaseHint>
@@ -1438,7 +1438,7 @@ export default function Servicios() {
           )}
         </CaseCard>
 
-        {/* ✅ CATÁLOGO ABAJO A ANCHO COMPLETO */}
+        {/* CATÁLOGO ABAJO A ANCHO COMPLETO */}
         <CardShell>
           <Tabs>
             <TabButton $active={tab === "productos"} onClick={() => setTab("productos")}>
@@ -1457,7 +1457,7 @@ export default function Servicios() {
               </p>
             </SectionHead>
 
-            {/* ✅ FILTROS 1 POR FILA, HACIA ABAJO */}
+            {/* FILTROS 1 POR FILA, HACIA ABAJO */}
             <FiltersStack>
               <SearchInput
                 placeholder="Buscar (nombre, descripción, modelo, marca, categoría)…"
