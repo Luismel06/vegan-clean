@@ -743,7 +743,7 @@ export default function Servicios() {
         .order("id", { ascending: true });
 
       if (error) {
-        console.error("Error al cargar productos:", error);
+        console.error(" Error al cargar productos:", error);
         setProductos([]);
       } else {
         const mapped = (data || []).map((p) => ({
